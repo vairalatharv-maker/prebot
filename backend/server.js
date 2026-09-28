@@ -25,13 +25,20 @@ app.use((err, _req, res, _next) => {
   const message = status === 413 ? 'The request is too large.' : status === 400 ? 'The request body must be valid JSON.' : 'The server could not complete the request.';
   res.status(status).json({ message });
 });
-
 if (process.env.MONGODB_URI) {
   mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('Connected to MongoDB.'))
-    .catch((error) => { console.error('MongoDB connection failed:', error.message); });
+    .catch((error) => {
+      console.error('MongoDB connection failed:', error.message);
+    });
 } else {
   console.warn('MONGODB_URI is not configured. Using an in-memory auth fallback for local development.');
 }
 
-app.listen(port, '0.0.0.0', () => console.log(`PrepBot API listening on port ${port}`));
+if (process.env.VERCEL !== '1') {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`PrepBot API listening on port ${port}`);
+  });
+}
+
+export default app;
