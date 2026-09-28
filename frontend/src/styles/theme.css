@@ -1,0 +1,145 @@
+/* Theme-aware surfaces for the existing light and dark application modes. */
+body{transition:background-color .2s ease,color .2s ease}
+body[data-theme='dark'] .sidebar{background:#0c1020;border-color:#252b3e;color:#eef0fb}
+body[data-theme='dark'] .sidebar .brand-mark{background:#25203f;color:#b7aaff}
+body[data-theme='dark'] .sidebar .nav-caption{color:#a6acc1}
+body[data-theme='dark'] .sidebar .nav-link,body[data-theme='dark'] .sidebar .logout-link{color:#d0d5e6}
+body[data-theme='dark'] .sidebar .nav-link:hover,body[data-theme='dark'] .sidebar .logout-link:hover{background:#ffffff12;color:#fff}
+body[data-theme='dark'] .sidebar .nav-link.active{background:#6553dc;color:#fff}
+body[data-theme='dark'] .sidebar .sidebar-foot{border-color:#252b3e;color:#aeb5c9}
+body[data-theme='dark'] .theme-toggle{background:#171d30;border-color:#303950;color:#f0d984;box-shadow:none}
+body[data-theme='dark'] .theme-toggle:hover{background:#202840}
+body[data-theme='dark'] .main-content{background:var(--page-bg)}
+body[data-theme='dark'] .quiet-button{background:#151c2e;border-color:#303950;color:#d2d7e7}
+body[data-theme='dark'] .quiet-button:hover{border-color:#7467cc;color:#fff}
+body[data-theme='dark'] .dash-hero,
+body[data-theme='dark'] .dash-sprint-card,
+body[data-theme='dark'] .dash-metric-card,
+body[data-theme='dark'] .dash-topic-card,
+body[data-theme='dark'] .assessment-intro-card,
+body[data-theme='dark'] .assessment-last-result,
+body[data-theme='dark'] .assessment-quiz,
+body[data-theme='dark'] .assessment-result-hero,
+body[data-theme='dark'] .assessment-results-panel,
+body[data-theme='dark'] .assessment-score-card,
+body[data-theme='dark'] .assessment-review,
+body[data-theme='dark'] .chat-shell,
+body[data-theme='dark'] .chat-header,
+body[data-theme='dark'] .chat-composer,
+body[data-theme='dark'] .interview-setup-hero,
+body[data-theme='dark'] .interview-setup-panel,
+body[data-theme='dark'] .interview-side-panel,
+body[data-theme='dark'] .interview-session,
+body[data-theme='dark'] .interview-result-hero,
+body[data-theme='dark'] .interview-reflection-card,
+body[data-theme='dark'] .interview-answer-summary,
+body[data-theme='dark'] .interview-previous-session,
+body[data-theme='dark'] .interview-check-item,
+body[data-theme='dark'] .interview-answer-box,
+body[data-theme='dark'] .roadmap-functional .roadmap-hero,
+body[data-theme='dark'] .roadmap-summary,
+body[data-theme='dark'] .roadmap-task,
+body[data-theme='dark'] .roadmap-focus-card{background:#111a2a;border-color:#2a3650;color:#edf3ff;box-shadow:none}
+body[data-theme='dark'] .dash-hero{background:linear-gradient(115deg,#111a2a 0%,#111a2a 58%,#18162f 100%)}
+body[data-theme='dark'] .dash-sprint-card{background:#151d30;border-color:#2a3650}
+body[data-theme='dark'] .dash-topic-card.topic-focus,
+body[data-theme='dark'] .roadmap-functional .roadmap-note{background:#17172c;border-color:#302c50}
+body[data-theme='dark'] .roadmap-task.is-complete{background:#151d2e;border-color:#344050}
+body[data-theme='dark'] .dash-assessment-nudge{background:#111a2a;border-color:#37405a}
+body[data-theme='dark'] .dash-hero-copy h2,
+body[data-theme='dark'] .dash-section-header h2,
+body[data-theme='dark'] .dash-section-title h2,
+body[data-theme='dark'] .dash-sprint-card h3,
+body[data-theme='dark'] .dash-metric-value,
+body[data-theme='dark'] .assessment-intro-copy h2,
+body[data-theme='dark'] .assessment-category-card strong,
+body[data-theme='dark'] .assessment-quiz-heading p,
+body[data-theme='dark'] .assessment-question-card h2,
+body[data-theme='dark'] .assessment-score-card strong,
+body[data-theme='dark'] .assessment-result-hero h2,
+body[data-theme='dark'] .assessment-panel-heading h3,
+body[data-theme='dark'] .assessment-review-item h4,
+body[data-theme='dark'] .roadmap-functional .roadmap-copy h2,
+body[data-theme='dark'] .roadmap-carousel-slide h2,
+body[data-theme='dark'] .roadmap-functional .roadmap-section-heading h2,
+body[data-theme='dark'] .roadmap-phase-heading h3,
+body[data-theme='dark'] .roadmap-task-copy h4,
+body[data-theme='dark'] .roadmap-functional .roadmap-note h3,
+body[data-theme='dark'] .roadmap-focus-card h3{color:#eef1fc}
+body[data-theme='dark'] .dash-hero-copy p,
+body[data-theme='dark'] .dash-sprint-card p,
+body[data-theme='dark'] .dash-metric-card p,
+body[data-theme='dark'] .dash-section-title p,
+body[data-theme='dark'] .dash-topic-list li,
+body[data-theme='dark'] .assessment-intro-copy>p,
+body[data-theme='dark'] .assessment-category-card p,
+body[data-theme='dark'] .assessment-category-count,
+body[data-theme='dark'] .assessment-quiz-heading p span,
+body[data-theme='dark'] .assessment-question-meta,
+body[data-theme='dark'] .assessment-option,
+body[data-theme='dark'] .assessment-controls>span,
+body[data-theme='dark'] .assessment-result-hero p,
+body[data-theme='dark'] .assessment-score-card>div:first-child,
+body[data-theme='dark'] .assessment-review-item p,
+body[data-theme='dark'] .assessment-review-item small,
+body[data-theme='dark'] .roadmap-functional .roadmap-copy p,
+body[data-theme='dark'] .roadmap-carousel-slide p,
+body[data-theme='dark'] .roadmap-phase-heading p,
+body[data-theme='dark'] .roadmap-task-copy p,
+body[data-theme='dark'] .roadmap-functional .roadmap-note p,
+body[data-theme='dark'] .roadmap-focus-card p{color:#aab3c8}
+body[data-theme='dark'] .assessment-category-list,
+body[data-theme='dark'] .assessment-question-nav button,
+body[data-theme='dark'] .assessment-option,
+body[data-theme='dark'] .assessment-timer,
+body[data-theme='dark'] .assessment-submit-confirm,
+body[data-theme='dark'] .assessment-review-item,
+body[data-theme='dark'] .roadmap-task-check:hover{background:#151e31;border-color:#303b53;color:#dce2f2}
+body[data-theme='dark'] .assessment-option.selected{background:#252143;border-color:#8374eb;color:#f0edff}
+body[data-theme='dark'] .assessment-question-nav button.answered{background:#211e3b;border-color:#484175;color:#d7d0ff}
+body[data-theme='dark'] .assessment-progress-track,
+body[data-theme='dark'] .dash-meter,
+body[data-theme='dark'] .dash-sprint-meter,
+body[data-theme='dark'] .roadmap-meter{background:#29344b}
+body[data-theme='dark'] .roadmap-task-check{color:#a7b0c5}
+body[data-theme='dark'] .roadmap-phase-marker span{background:#24203f;border-color:#38315c;color:#c5baff}
+body[data-theme='dark'] .roadmap-phase:not(:last-child) .roadmap-phase-marker:after{background:#34314b}
+body[data-theme='dark'] .roadmap-summary-copy strong{color:#e5e9f6}
+body[data-theme='dark'] .chat-message.assistant,body[data-theme='dark'] .chat-bubble.assistant{background:#151e31;border-color:#2d3952;color:#e7ebf6}
+body[data-theme='dark'] .chat-message-user .chat-user-bubble{background:#302a58;border-color:#413a6f;color:#f1efff}
+body[data-theme='dark'] .chat-assistant-content{color:#d3daea}
+body[data-theme='dark'] .chat-empty-state h1,body[data-theme='dark'] .chat-markdown h1,body[data-theme='dark'] .chat-markdown h2,body[data-theme='dark'] .chat-markdown h3,body[data-theme='dark'] .chat-markdown h4,body[data-theme='dark'] .chat-markdown strong{color:#eef1fc}
+body[data-theme='dark'] .chat-empty-state>p,body[data-theme='dark'] .chat-brand>div>span,body[data-theme='dark'] .chat-online{color:#aab3c8}
+body[data-theme='dark'] .chat-header{border-color:#29344b}
+body[data-theme='dark'] .chat-new-button,body[data-theme='dark'] .chat-suggestions button,body[data-theme='dark'] .chat-scroll-latest{background:#151e31;border-color:#303950;color:#dce2f2}
+body[data-theme='dark'] .chat-composer textarea{background:#0e1525;color:#edf3ff;border-color:#303950}
+body[data-theme='dark'] .interview-setup-hero{background:linear-gradient(105deg,#111a2a 0%,#111a2a 68%,#19172e 100%)}
+body[data-theme='dark'] .interview-setup-hero h2,body[data-theme='dark'] .interview-panel-heading h3,body[data-theme='dark'] .interview-side-panel>h3,body[data-theme='dark'] .interview-session h2,body[data-theme='dark'] .interview-result-hero h2,body[data-theme='dark'] .interview-reflection-card h3,body[data-theme='dark'] .interview-summary-item h4{color:#eef1fc}
+body[data-theme='dark'] .interview-setup-hero p,body[data-theme='dark'] .interview-panel-heading p,body[data-theme='dark'] .interview-field-label,body[data-theme='dark'] .interview-side-panel li strong,body[data-theme='dark'] .interview-side-panel li p,body[data-theme='dark'] .interview-session-topic,body[data-theme='dark'] .interview-answer-hint,body[data-theme='dark'] .interview-answer-label,body[data-theme='dark'] .interview-result-hero p,body[data-theme='dark'] .interview-reflection-card p,body[data-theme='dark'] .interview-summary-item p{color:#aab3c8}
+body[data-theme='dark'] .interview-side-panel,body[data-theme='dark'] .interview-reflection-tip,body[data-theme='dark'] .interview-reflection,body[data-theme='dark'] .interview-check-item.checked{background:#17172c;border-color:#302c50;color:#d8def0}
+body[data-theme='dark'] .interview-select,body[data-theme='dark'] .interview-format-option,body[data-theme='dark'] .interview-level-option,body[data-theme='dark'] .interview-answer-box{background:#0e1525;border-color:#303950;color:#e3e8f6}
+body[data-theme='dark'] .interview-format-option.selected,body[data-theme='dark'] .interview-level-option.selected{background:#252143;border-color:#8374eb;color:#f0edff}
+body[data-theme='dark'] .interview-session{background:#111a2a}
+body[data-theme='dark'] .interview-check-item{background:#151e31;border-color:#303950;color:#dce2f2}
+body[data-theme='dark'] .interview-previous-session strong{color:#eef1fc}
+body[data-theme='dark'] .interview-previous-session small{color:#aab3c8}
+body[data-theme='dark'] .interview-summary-item{border-color:#29344b}
+body[data-theme='dark'] .interview-controls{border-color:#29344b}
+body[data-theme='dark'] .mobile-menu{background:#111a2a;border-color:#303950;color:#edf3ff}
+body[data-theme='dark'] .auth-page{background:#0b1220}
+body[data-theme='dark'] .auth-aside{background:linear-gradient(145deg,#17152d 0%,#111a2a 58%,#101a30 100%)}
+body[data-theme='dark'] .auth-brand,body[data-theme='dark'] .auth-pitch h1,body[data-theme='dark'] .auth-heading h2{color:#eef1fc}
+body[data-theme='dark'] .auth-aside .brand-mark,body[data-theme='dark'] .auth-mobile-brand .brand-mark{background:#2a244a;color:#b7aaff}
+body[data-theme='dark'] .auth-pitch p,body[data-theme='dark'] .auth-trust,body[data-theme='dark'] .auth-heading p{color:#aab3c8}
+body[data-theme='dark'] .auth-abstract{border-color:#302c50}
+body[data-theme='dark'] .auth-abstract span{border-color:#302c50}
+body[data-theme='dark'] .auth-abstract span:nth-child(3){background:#8170ed12}
+body[data-theme='dark'] .auth-form label{color:#dce2f2}
+body[data-theme='dark'] .input-wrap{background:#111a2a;border-color:#303950;color:#aab3c8}
+body[data-theme='dark'] .input-wrap:focus-within{border-color:#8c7df0;box-shadow:0 0 0 3px #8f80ff1a}
+body[data-theme='dark'] .input-wrap input{color:#eef1fc}
+body[data-theme='dark'] .input-wrap input::placeholder{color:#78849c}
+body[data-theme='dark'] .form-note,body[data-theme='dark'] .auth-footer,body[data-theme='dark'] .auth-legal{color:#929db3}
+body[data-theme='dark'] .auth-footer{border-color:#29344b}
+body[data-theme='dark'] .auth-footer a{color:#a99cff}
+@media(prefers-reduced-motion:reduce){body{transition:none}}

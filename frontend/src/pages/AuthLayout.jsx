@@ -1,0 +1,7 @@
+import { BrainCircuit, ShieldCheck, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import SectionArtwork from '../components/SectionArtwork.jsx';
+
+export default function AuthLayout({ title, subtitle, children, footer, alternate }) {
+  return <main className="auth-page"><section className="auth-aside"><Link to="/login" className="brand auth-brand"><span className="brand-mark"><BrainCircuit size={20} /></span><span>PrepBot<span className="brand-period">.</span></span></Link><div className="auth-pitch"><div className="eyebrow"><Sparkles size={14} /> YOUR CAREER, IN FOCUS</div><h1>Show up ready<br />for what’s next.</h1><p>A focused space to sharpen your skills, build confidence, and take the next step in your career.</p><div className="auth-trust"><ShieldCheck size={17} /> Your progress stays yours</div></div><div className="auth-abstract"><span /><span /><span /></div><div className="auth-illustration"><SectionArtwork type="login" /></div></section><section className="auth-main"><div className="auth-mobile-brand"><span className="brand-mark"><BrainCircuit size={19} /></span>PrepBot<span className="brand-period">.</span></div><div className="auth-card"><div className="auth-heading"><h2>{title}</h2><p>{subtitle}</p></div>{children}<div className="auth-footer">{footer} <Link to={alternate.to}>{alternate.text}</Link></div></div><div className="auth-legal">© 2026 PrepBot · Built for your next opportunity</div></section></main>;
+}
