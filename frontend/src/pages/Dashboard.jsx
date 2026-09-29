@@ -4,9 +4,11 @@ import { ArrowRight, ArrowUpRight, BookOpenCheck, BrainCircuit, Check, CircleHel
 import { useAuth } from '../context/AuthContext.jsx';
 import SectionArtwork from '../components/SectionArtwork.jsx';
 import '../styles/dashboard.css';
+import '../styles/dashboard-growth.css';
 
 const RESULT_KEY = (userId) => `prepbot.assessment.latest.${userId}`;
 const SPRINT_KEY = (userId) => `prepbot.sprint.${userId}`;
+const INTERVIEW_HISTORY_KEY = (userId) => `prepbot.mockinterview.history.${userId || 'session'}`;
 const asScore = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100 ? Number(value) : null;
 
 function readJson(key) {
@@ -42,6 +44,12 @@ function readSprint(userId) {
   return { focus: typeof sprint.focus === 'string' ? sprint.focus : 'Your learning sprint', progress, weeklyChange };
 }
 
+function readInterviewHistory(userId) {
+  if (!userId) return [];
+  const history = readJson(INTERVIEW_HISTORY_KEY(userId));
+  return Array.isArray(history) ? history.filter((item) => item && typeof item === 'object').slice(0, 20) : [];
+}
+
 function MetricCard({ icon: Icon, label, value, note, tone }) {
   return <article className="dash-metric-card">
     <div className="dash-metric-heading"><span className={`dash-metric-icon ${tone}`}><Icon size={17} /></span><span>{label}</span></div>
@@ -65,8 +73,15 @@ export default function Dashboard() {
   const userId = user?.id || user?._id;
   const assessment = useMemo(() => readAssessment(userId), [userId]);
   const sprint = useMemo(() => readSprint(userId), [userId]);
+  const interviewHistory = useMemo(() => readInterviewHistory(userId), [userId]);
   const sprintProgress = sprint?.progress ?? 0;
   const greetingName = user?.name?.trim() || 'there';
+  const latestInterview = interviewHistory[0] || null;
+  const interviewScores = interviewHistory.slice(0, 6).reverse();
+  const latestInterviewScore = asScore(latestInterview?.report?.overall_score);
+  const previousInterviewScore = asScore(interviewHistory[1]?.report?.overall_score);
+  const interviewChange = latestInterviewScore !== null && previousInterviewScore !== null ? latestInterviewScore - previousInterviewScore : null;
+  const interviewFocus = latestInterview?.report?.gaps?.[0] || latestInterview?.report?.preparation_plan?.[0]?.focus;
 
   return <div className="page-wrap dashboard-page">
     <header className="page-topline dashboard-topline">
@@ -109,6 +124,12 @@ export default function Dashboard() {
     <section className="dash-topic-grid">
       <TopicCard title="Strong topics" description="Build on what you already know." topics={assessment?.strongAreas || []} kind="strong" />
       <TopicCard title="Focus areas" description="Turn your next gaps into strengths." topics={assessment?.weakAreas || []} kind="focus" />
+    </section>
+
+    <section className="dash-interview-growth">
+      <div className="dash-growth-heading"><div><span className="dash-section-kicker">KEEP GETTING BETTER</span><h2>Interview growth</h2><p>Your mock interview scores and next preparation focus.</p></div><Link className="dash-growth-action" to="/mock-interview">Practice another interview <ArrowRight size={14}/></Link></div>
+      {latestInterview ? <div className="dash-growth-content"><div className="dash-growth-summary"><div className="dash-growth-score"><span>Latest interview</span><strong>{latestInterviewScore === null ? '—' : `${latestInterviewScore}%`}</strong>{interviewChange !== null && <small className={interviewChange >= 0 ? 'is-up' : 'is-down'}><TrendingUp size={13}/> {interviewChange > 0 ? '+' : ''}{interviewChange} points vs previous</small>}</div><div className="dash-growth-stat"><span>Completed sessions</span><strong>{interviewHistory.length}</strong><small>Saved on this account</small></div><div className="dash-growth-stat dash-growth-focus"><span>Recommended focus</span><strong>{interviewFocus || 'Keep practicing'}</strong><small>{latestInterview.report?.preparation_plan?.[0]?.practice || 'Complete another session to build your report.'}</small></div></div><div className="dash-growth-chart"><div className="dash-growth-chart-title"><span>Recent practice scores</span><small>Each bar is one completed interview</small></div>{interviewScores.some((item) => asScore(item.report?.overall_score) !== null) ? <div className="dash-growth-bars">{interviewScores.map((item, index) => { const score = asScore(item.report?.overall_score) ?? 0; return <div className="dash-growth-bar-item" key={`${item.completedAt || index}-${index}`} title={`${score}% · ${item.role || 'Mock interview'}`}><div className="dash-growth-bar-track"><span style={{ height: `${Math.max(6, score)}%` }}/></div><small>{item.completedAt ? new Date(item.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `#${index + 1}`}</small></div>; })}</div> : <p className="dash-growth-empty">Complete a mock interview to start tracking your growth.</p>}</div></div> : <div className="dash-growth-empty-state"><span className="dash-growth-empty-icon"><TrendingUp size={18}/></span><div><strong>Your interview growth will appear here.</strong><p>Complete a 15-minute mock interview to get a score, identify gaps, and receive a preparation plan.</p></div><Link to="/mock-interview">Start interview <ArrowRight size={14}/></Link></div>}
+      <p className="dash-growth-disclaimer">Practice scores are estimates based on your answer transcripts, not hiring predictions.</p>
     </section>
 
     {!assessment && <aside className="dash-assessment-nudge"><span className="dash-nudge-icon"><Target size={17} /></span><div><strong>Your dashboard gets personal after your first assessment.</strong><p>It takes about 30 minutes and helps PrepBot recommend what to focus on next.</p></div><Link to="/assessment" className="dash-nudge-link">Start assessment <ArrowRight size={15} /></Link></aside>}

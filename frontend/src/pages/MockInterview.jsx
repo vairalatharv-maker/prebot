@@ -16,8 +16,12 @@ function parseInterviewTurn(content) {
   try {
     const clean = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
     const value = JSON.parse(clean);
-    return { speech: typeof value.say === 'string' ? value.say : content, feedback: value.live_feedback && typeof value.live_feedback === 'object' ? value.live_feedback : null };
-  } catch { return { speech: content, feedback: null }; }
+    return { speech: cleanInterviewerSpeech(typeof value.say === 'string' ? value.say : content), feedback: value.live_feedback && typeof value.live_feedback === 'object' ? value.live_feedback : null };
+  } catch { return { speech: cleanInterviewerSpeech(content), feedback: null }; }
+}
+
+function cleanInterviewerSpeech(text) {
+  return text.replace(/\[candidate answer\]/gi, '').replace(/(?:^|\n)\s*Candidate answer:.*$/is, '').replace(/\s+Great,\s*$/i, '').replace(/\s+/g, ' ').trim();
 }
 
 function parseInterviewReport(content) {
@@ -108,6 +112,8 @@ export default function MockInterview() {
   const videoRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const speechRecognitionRef = useRef(null);
+  const voiceSilenceTimerRef = useRef(null);
+  const voiceTurnRef = useRef(0);
   const callAbortRef = useRef(null);
   const callHistoryRef = useRef([]);
   const callDraftRef = useRef('');
@@ -148,6 +154,9 @@ export default function MockInterview() {
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    utterance.voice = voices.find((voice) => /english/i.test(voice.lang) && /(natural|google|neural)/i.test(voice.name)) || voices.find((voice) => /en-IN/i.test(voice.lang)) || null;
+    utterance.lang = utterance.voice?.lang || 'en-IN';
     utterance.rate = 0.96;
     utterance.pitch = 1.02;
     utterance.onstart = () => setAiSpeaking(true);
@@ -164,11 +173,12 @@ export default function MockInterview() {
     try {
       const reply = await streamChat({ messages: history, token, signal: controller.signal, interviewMode: true, onDelta: () => {} });
       const turn = parseInterviewTurn(reply.content);
+      const spokenTurn = turn.speech || 'I lost my place for a moment. Could you repeat your last answer?';
       const completedHistory = [...history, reply];
       callHistoryRef.current = completedHistory;
-      setCallMessages((current) => current.map((message, index) => index === current.length - 1 ? { role: 'assistant', content: turn.speech } : message));
+      setCallMessages((current) => current.map((message, index) => index === current.length - 1 ? { role: 'assistant', content: spokenTurn } : message));
       if (turn.feedback) setLiveFeedbacks((current) => [...current, { ...turn.feedback, answerCount: callHistoryRef.current.filter((message) => message.role === 'user').length - 1 }]);
-      speakInterviewer(turn.speech);
+      speakInterviewer(spokenTurn);
     } catch (error) {
       if (error.name !== 'AbortError') setCallError(error.message || 'The interviewer could not respond. Try again.');
     } finally {
@@ -201,13 +211,16 @@ export default function MockInterview() {
     if (!Recognition) setCallNotice('For a fully voice-led interview, open this page in Chrome. You can still type your answers here.');
     setCallDraft('');
     callDraftRef.current = '';
+    voiceTurnRef.current += 1;
+    window.clearTimeout(voiceSilenceTimerRef.current);
     setCallError('');
     const topics = selected.map((question) => question.topic).join(', ');
     const kickoff = `You are interviewing a candidate for a ${role} position in a real company-style ${format} interview at ${level} level. This is a live 15-minute interview; the app enforces the hard time limit. Interview topics to cover naturally: ${topics}. Begin by greeting the candidate, briefly explain that you will ask a few role-relevant questions, then ask the first one. Ask one question at a time, wait for the candidate's spoken answer, and do not give away ideal answers or coach them during the interview. Keep each turn concise and professional, as a human interviewer would. No markdown.`;
     const history = [{ role: 'user', content: kickoff }];
     callHistoryRef.current = history;
     callActiveRef.current = true;
-    setCallMessages([{ role: 'assistant', content: '' }]);
+    callMessagesRef.current = [{ role: 'assistant', content: '' }];
+    setCallMessages(callMessagesRef.current);
     setMode('call');
     void receiveInterviewer(history);
   };
@@ -216,6 +229,8 @@ export default function MockInterview() {
     const answer = value.trim();
     if (!answer || callBusy || !callActiveRef.current) return;
     window.speechSynthesis?.cancel();
+    voiceTurnRef.current += 1;
+    window.clearTimeout(voiceSilenceTimerRef.current);
     const minutesRemaining = Math.ceil(callSeconds / 60);
     const candidateText = `Interview time remaining: about ${minutesRemaining} minute${minutesRemaining === 1 ? '' : 's'}. Candidate answer: ${answer}\nRespond as a professional company interviewer: briefly acknowledge the answer without evaluating or coaching, then ask the next role-relevant question. If the answer is genuinely unclear, ask one concise clarification instead. Ask only one question, keep the turn natural and under 3 sentences, and do not repeat a question already asked. When 2 minutes or less remain, wrap up naturally and invite one final question from the candidate.`;
     const history = [...callHistoryRef.current, { role: 'user', content: candidateText }];
@@ -231,11 +246,12 @@ export default function MockInterview() {
   const startVoiceAnswer = (autoSubmit = autoVoiceRef.current) => {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Recognition) { autoVoiceRef.current = false; setCallNotice('Voice transcription is not supported in this browser. Type your answer below instead.'); return; }
-    if (voiceInput) { speechRecognitionRef.current?.stop(); speechRecognitionRef.current = null; setVoiceInput(false); autoVoiceRef.current = false; return; }
+    if (voiceInput) { voiceTurnRef.current += 1; window.clearTimeout(voiceSilenceTimerRef.current); speechRecognitionRef.current?.stop(); speechRecognitionRef.current = null; setVoiceInput(false); autoVoiceRef.current = false; return; }
     const recognition = new Recognition();
-    recognition.lang = navigator.language || 'en-US';
+    const voiceTurn = ++voiceTurnRef.current;
+    recognition.lang = 'en-IN';
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true;
     const startText = callDraftRef.current;
     voiceTranscriptRef.current = '';
     recognition.onresult = (event) => {
@@ -245,14 +261,27 @@ export default function MockInterview() {
       const next = `${startText}${startText && !startText.endsWith(' ') ? ' ' : ''}${spoken}`;
       callDraftRef.current = next;
       setCallDraft(next);
+      if (event.results[event.results.length - 1]?.isFinal) {
+        window.clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = window.setTimeout(() => recognition.stop(), 2600);
+      }
     };
-    recognition.onerror = (event) => { setVoiceInput(false); autoVoiceRef.current = false; setCallNotice(event.error === 'not-allowed' ? 'Microphone permission was denied. You can type your answer.' : 'Voice input stopped. You can continue typing your answer.'); };
+    recognition.onerror = (event) => {
+      setVoiceInput(false);
+      if (event.error !== 'no-speech') autoVoiceRef.current = false;
+      setCallNotice(event.error === 'not-allowed' ? 'Microphone permission was denied. You can type your answer.' : event.error === 'no-speech' ? 'Speak whenever you are ready — I am listening.' : 'Voice input stopped. You can continue typing your answer.');
+    };
     recognition.onend = () => {
+      window.clearTimeout(voiceSilenceTimerRef.current);
+      if (voiceTurn !== voiceTurnRef.current) return;
       setVoiceInput(false);
       speechRecognitionRef.current = null;
       const spoken = voiceTranscriptRef.current;
-      if (autoSubmit && spoken.trim()) window.setTimeout(() => { if (callActiveRef.current) submitCallAnswerRef.current?.(`${startText}${startText && !startText.endsWith(' ') ? ' ' : ''}${spoken}`); }, 350);
-      else if (autoSubmit) setCallNotice('I did not catch that. Please answer by voice again or type your response.');
+      if (autoSubmit && spoken.trim()) window.setTimeout(() => { if (callActiveRef.current && voiceTurn === voiceTurnRef.current) submitCallAnswerRef.current?.(`${startText}${startText && !startText.endsWith(' ') ? ' ' : ''}${spoken}`); }, 350);
+      else if (autoSubmit && callActiveRef.current && autoVoiceRef.current) {
+        setCallNotice('Speak whenever you are ready — the interviewer is listening.');
+        window.setTimeout(() => { if (callActiveRef.current && autoVoiceRef.current) startVoiceAnswerRef.current?.(true); }, 450);
+      }
     };
     speechRecognitionRef.current = recognition;
     try { recognition.start(); setVoiceInput(true); setCallNotice(autoSubmit ? 'Your interviewer is listening. Speak naturally; your answer will be sent when you finish.' : 'Listening… speak your answer, then send it when you are ready.'); }
@@ -301,19 +330,20 @@ export default function MockInterview() {
       answers: summary.filter((message) => message.role === 'user').length,
       report,
       liveFeedbacks,
-      transcript: summary,
     };
     try {
       const history = [record, ...readAiHistory(userId)].slice(0, 20);
       localStorage.setItem(AI_HISTORY_KEY(userId), JSON.stringify(history));
-      localStorage.setItem(SESSION_KEY(userId), JSON.stringify({ ...record, aiInterview: true }));
     } catch { setHistoryWarning(true); }
     setInterviewReport(report);
     setMode('ai-results');
   }, [token, userId, role, level, format, liveFeedbacks, callSeconds]);
 
   const endAiInterview = () => {
+    if (!callActiveRef.current) return;
     callActiveRef.current = false;
+    voiceTurnRef.current += 1;
+    window.clearTimeout(voiceSilenceTimerRef.current);
     callAbortRef.current?.abort();
     callAbortRef.current = null;
     speechRecognitionRef.current?.stop();
@@ -351,6 +381,9 @@ export default function MockInterview() {
   }, [mode, cameraEnabled]);
 
   useEffect(() => () => {
+    callActiveRef.current = false;
+    voiceTurnRef.current += 1;
+    window.clearTimeout(voiceSilenceTimerRef.current);
     callAbortRef.current?.abort();
     speechRecognitionRef.current?.stop();
     window.speechSynthesis?.cancel();
@@ -421,7 +454,7 @@ export default function MockInterview() {
           <button type="button" className="primary-button interview-start-button" onClick={startAiInterview}>Start 15-minute interview <ArrowRight size={17} /></button>
           <button type="button" className="ai-quick-practice" onClick={beginSession}>Use text-only practice instead</button>
         </div>
-        <aside className="interview-side-panel"><span className="interview-kicker">YOUR AI INTERVIEW</span><h3>A focused 15-minute interview.</h3><ol><li><span>1</span><div><strong>Meet your interviewer</strong><p>PrepBot speaks each role-focused question and follows up on your answers.</p></div></li><li><span>2</span><div><strong>Answer naturally</strong><p>Allow microphone access for automatic voice answers, or type whenever you prefer.</p></div></li><li><span>3</span><div><strong>Review your conversation</strong><p>The interview ends at 15 minutes. Your transcript is ready to review afterward.</p></div></li></ol><div className="interview-honesty-note"><Sparkles size={15} /><p>Your camera preview stays in your browser. Only answer text or speech transcription is sent to PrepBot; the call is not recorded.</p></div></aside>
+        <aside className="interview-side-panel"><span className="interview-kicker">YOUR AI INTERVIEW</span><h3>A focused 15-minute interview.</h3><ol><li><span>1</span><div><strong>Meet your interviewer</strong><p>PrepBot speaks each role-focused question and follows up on your answers.</p></div></li><li><span>2</span><div><strong>Answer naturally</strong><p>Allow microphone access once; answer out loud without pressing a listening button, or type whenever you prefer.</p></div></li><li><span>3</span><div><strong>Review your conversation</strong><p>The interview ends at 15 minutes. Your feedback and preparation plan appear afterward.</p></div></li></ol><div className="interview-honesty-note"><Sparkles size={15} /><p>Your camera preview stays local. Speech is transcribed for PrepBot; audio/video are not recorded. Your report and growth scores are saved in this browser.</p></div></aside>
       </section>
       {savedSession && <button type="button" className="interview-previous-session" onClick={() => { setSession(savedSession); setMode('results'); }}><span className="interview-previous-icon"><Trophy size={17} /></span><span><strong>View your last practice round</strong><small>{savedSession.answered} answers saved{dateLabel ? ` · ${dateLabel}` : ''}</small></span><ArrowRight size={16} /></button>}
     </main>}
@@ -431,10 +464,10 @@ export default function MockInterview() {
       <div className="ai-call-layout">
         <section className="ai-call-stage" aria-label="Video interview">
           <div className="ai-stage-glow" />
-          <div className={`ai-interviewer-avatar ${callBusy ? 'is-speaking' : ''}`} aria-label="AI interviewer avatar"><div className="ai-avatar-halo"/><div className="ai-avatar-head"><span className="ai-avatar-hair"/><span className="ai-avatar-eye eye-left"/><span className="ai-avatar-eye eye-right"/><span className="ai-avatar-nose"/><span className="ai-avatar-smile"/></div><div className="ai-avatar-shoulders"/><div className="ai-avatar-spark"><Sparkles size={17}/></div></div>
+          <div className={`ai-interviewer-avatar ${aiSpeaking ? 'is-speaking' : ''}`} aria-label="AI interviewer avatar"><div className="ai-avatar-halo"/><div className="ai-avatar-head"><span className="ai-avatar-hair"/><span className="ai-avatar-eye eye-left"/><span className="ai-avatar-eye eye-right"/><span className="ai-avatar-nose"/><span className="ai-avatar-smile"/></div><div className="ai-avatar-shoulders"/><div className="ai-avatar-spark"><Sparkles size={17}/></div></div>
           <div className="ai-interviewer-label"><strong>PrepBot</strong><span>{aiSpeaking ? 'Speaking…' : voiceInput ? 'Listening…' : callBusy ? 'Thinking…' : 'AI interviewer'}</span>{aiSpeaking && <Volume2 size={14}/>}</div>
           <div className="ai-self-video">{cameraEnabled && mediaStreamRef.current ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera preview" /> : <div className="ai-camera-off"><CameraOff size={22}/><span>Camera off</span></div>}<span className="ai-self-video-label">You</span></div>
-          <div className="ai-call-controls"><div className={`ai-voice-status ${voiceInput ? 'is-listening' : aiSpeaking ? 'is-speaking' : ''}`}><Mic size={17}/><span>{voiceInput ? 'Listening automatically — speak naturally' : aiSpeaking ? 'PrepBot is speaking' : callBusy ? 'Preparing your next question' : 'Voice interview · no button needed'}</span></div><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
+          <div className="ai-call-controls"><div className={`ai-voice-status ${voiceInput ? 'is-listening' : aiSpeaking ? 'is-speaking' : ''}`}><Mic size={17}/><span>{aiSpeaking ? 'PrepBot is speaking' : callBusy ? 'Preparing your next question' : autoVoiceRef.current ? 'Speak naturally — it listens automatically' : 'Type your answer below'}</span></div><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
           <p className="ai-call-privacy">Camera preview is local and is not recorded or sent.</p>
         </section>
         <aside className="ai-call-transcript">
@@ -458,7 +491,7 @@ export default function MockInterview() {
       <section className="ai-report-panel ai-preparation-plan"><div><span className="interview-kicker">YOUR PREPARATION PLAN</span><h3>Concrete next steps</h3></div>{interviewReport?.preparation_plan?.length ? interviewReport.preparation_plan.map((item, index) => <article key={`${item.focus}-${index}`}><span className="ai-plan-number">{String(index + 1).padStart(2, '0')}</span><div><h4>{item.focus || 'Focused practice'}</h4><p>{item.why}</p><strong>{item.practice}</strong></div><small>{item.time}</small></article>) : <p>Practice a few more questions to build a detailed preparation plan.</p>}</section>
       <section className="interview-answer-summary ai-results-transcript"><div className="interview-summary-heading"><span className="interview-kicker">INTERVIEW TRANSCRIPT</span><button type="button" onClick={startAiInterview}><RotateCcw size={13}/> New AI interview</button></div>{aiSessionSummary.map((message, index) => <article className="interview-summary-item" key={`${message.role}-${index}`}><span className="interview-summary-number">{message.role === 'user' ? 'YOU' : 'AI'}</span><div><span>{message.role === 'user' ? 'Your answer' : 'PrepBot interviewer'}</span><p>{message.content}</p></div></article>)}</section>
       {historyWarning && <p className="interview-storage-warning" role="status">Your report is visible now, but browser storage could not save it to dashboard history.</p>}
-      <footer className="interview-result-actions"><p><ShieldCheck size={15}/> Scores are practice estimates based on your spoken answer transcripts; no video is recorded.</p><button type="button" className="primary-button interview-start-button" onClick={() => setMode('setup')}>Back to interview setup <ArrowRight size={15}/></button></footer></main>}
+      <footer className="interview-result-actions"><p><ShieldCheck size={15}/> Scores are practice estimates from answer transcripts. Audio/video are not recorded; your report is saved in this browser.</p><button type="button" className="primary-button interview-start-button" onClick={() => setMode('setup')}>Back to interview setup <ArrowRight size={15}/></button></footer></main>}
 
     {mode === 'interview' && currentQuestion && <main className="interview-session">
       <div className="interview-session-top"><div><span className={`interview-kind-tag ${currentQuestion.kind}`}>{currentQuestion.kind === 'technical' ? 'TECHNICAL' : 'BEHAVIORAL'} ROUND</span><span className="interview-session-topic">{currentQuestion.topic}</span></div><span className="interview-count">Question {questionIndex + 1} of {questions.length}</span></div>
