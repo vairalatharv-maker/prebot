@@ -5,9 +5,12 @@ const GROQ_CHAT_URL = `${GROQ_BASE_URL}/chat/completions`;
 const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-20b';
 const FALLBACK_GROQ_MODELS = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
 
-function safeUpstreamError(status) {
+function safeUpstreamError(status, { retryAfterSeconds } = {}) {
   const error = new Error('Groq request failed.');
   error.status = status;
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    error.retryAfterSeconds = Math.ceil(retryAfterSeconds);
+  }
   return error;
 }
 
@@ -48,7 +51,10 @@ async function requestGroqChatWithModel(messages, model, { stream, signal, onDel
     }),
   });
 
-  if (!response.ok) throw safeUpstreamError(response.status);
+  if (!response.ok) {
+    const retryAfterSeconds = Number(response.headers.get('retry-after'));
+    throw safeUpstreamError(response.status, { retryAfterSeconds });
+  }
   if (!stream) {
     const payload = await response.json();
     const content = payload?.choices?.[0]?.message?.content;
@@ -99,7 +105,10 @@ export async function requestGroqChat(messages, { stream, signal, onDelta, inter
       return await requestGroqChatWithModel(messages, model, { stream, signal, onDelta, interviewMode, interviewFeedbackMode });
     } catch (error) {
       lastError = error;
-      if (error?.status !== 404 && error?.status !== 400) throw error;
+      // A model-specific 429 should not prevent trying the supported fallback
+      // models. If Groq is rate-limiting the whole account, the final error is
+      // returned with its Retry-After duration.
+      if (![400, 404, 429].includes(error?.status)) throw error;
     }
   }
 
@@ -109,7 +118,13 @@ export async function requestGroqChat(messages, { stream, signal, onDelta, inter
 export function getGroqError(error) {
   if (error?.code === 'MISSING_API_KEY') return { status: 503, message: error.message };
   if (error?.name === 'AbortError' || error?.name === 'TimeoutError') return { status: 504, message: 'PrepBot took too long to respond. Please try again.' };
-  if (error?.status === 429) return { status: 429, message: 'PrepBot is busy right now. Please wait a moment and try again.' };
+  if (error?.status === 429) {
+    const wait = error.retryAfterSeconds;
+    const message = wait
+      ? `Groq is temporarily rate-limiting requests. Please try again in about ${wait} seconds.`
+      : 'Groq is temporarily rate-limiting requests. Please wait a moment and try again.';
+    return { status: 429, message };
+  }
   if (error?.status === 401 || error?.status === 403) return { status: 503, message: 'The Groq API credentials are not accepted. Check GROQ_API_KEY in backend/.env.' };
   if (error?.status && error.status >= 500) return { status: 502, message: 'The AI service is temporarily unavailable. Please try again.' };
   return { status: 502, message: 'PrepBot could not complete that response. Please try again.' };

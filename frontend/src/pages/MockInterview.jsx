@@ -11,7 +11,8 @@ const ANSWER_SECONDS = 150;
 const AI_INTERVIEW_SECONDS = 15 * 60;
 const SESSION_KEY = (userId) => `prepbot.mockinterview.latest.${userId || 'session'}`;
 const AI_HISTORY_KEY = (userId) => `prepbot.mockinterview.history.${userId || 'session'}`;
-const InterviewerAvatar = lazy(() => import('../components/InterviewerAvatar.jsx'));
+const loadInterviewerAvatar = () => import('../components/InterviewerAvatar.jsx');
+const InterviewerAvatar = lazy(loadInterviewerAvatar);
 
 function parseInterviewTurn(content) {
   try {
@@ -151,6 +152,24 @@ export default function MockInterview() {
     setTypedInterviewerQuestion('');
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    const preload = () => {
+      if (cancelled) return;
+      void loadInterviewerAvatar()
+        .then(({ preloadInterviewerAvatar }) => preloadInterviewerAvatar())
+        .catch(() => {});
+    };
+    const idleId = window.requestIdleCallback
+      ? window.requestIdleCallback(preload, { timeout: 1400 })
+      : window.setTimeout(preload, 500);
+    return () => {
+      cancelled = true;
+      if (window.cancelIdleCallback && window.requestIdleCallback) window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+  }, []);
+
   const beginSession = () => {
     const selectedQuestions = buildInterviewQuestions(level, role, format);
     setQuestions(selectedQuestions);
@@ -252,6 +271,9 @@ export default function MockInterview() {
   }, [token]);
 
   const startAiInterview = async () => {
+    void loadInterviewerAvatar()
+      .then(({ preloadInterviewerAvatar }) => preloadInterviewerAvatar())
+      .catch(() => {});
     setCallNotice('');
     const selected = buildInterviewQuestions(level, role, format);
     let stream = null;
