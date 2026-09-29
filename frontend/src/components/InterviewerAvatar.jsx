@@ -1,11 +1,13 @@
-import { Component, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useLoader } from '@react-three/fiber';
+import { Component, Suspense, useEffect, useMemo, useState } from 'react';
+import { Canvas, useLoader } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { AnimationMixer, Box3, MathUtils, Vector3 } from 'three';
+import { AnimationMixer, Box3, Vector3 } from 'three';
 import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+import { Box } from 'lucide-react';
+import AvatarLipSync from './AvatarLipSync.jsx';
+import AvatarController from './AvatarController.jsx';
 
-const VISEMES = ['aa', 'ih', 'ou', 'ee', 'oh'];
 const VISEME_KEYS = [/^(aa|ih|ou|ee|oh|a|i|u|e|o)$/i, /viseme.*(aa|ih|ou|ee|oh)/i, /mouth.*(open|aa|ih|ou|ee|oh)/i, /jaw.?open/i];
 const configuredLoaders = new WeakSet();
 const modelReferences = new Map();
@@ -57,11 +59,12 @@ class ModelBoundary extends Component {
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
-function FallbackPortrait({ speaking, message }) {
-  return <div className={`ai-interviewer-fallback ${speaking ? 'is-speaking' : ''}`} role="img" aria-label={`Anaya AI interviewer portrait. ${message}`}>
-    <img src="/images/prepbot-interviewer.png" alt="" />
-    <span className="ai-fallback-mouth" aria-hidden="true" />
-    <span className="ai-avatar-fallback-note">{message}</span>
+function MissingModel({ message }) {
+  return <div className="ai-avatar-missing" role="status" aria-live="polite">
+    <span className="ai-avatar-missing-icon"><Box size={25} strokeWidth={1.6} /></span>
+    <strong>Anaya · 3D interviewer</strong>
+    <span>{message}</span>
+    <small>Place your model at<br/><code>frontend/public/avatar/anaya.vrm</code></small>
   </div>;
 }
 
@@ -69,11 +72,11 @@ function AvatarLoading() {
   return <Html center><span className="ai-avatar-loading">Loading Anaya…</span></Html>;
 }
 
-function AvatarModel({ src, speaking, onMouthFallback }) {
-  const gltf = useLoader(GLTFLoader, src, (instance) => {
-    if (!configuredLoaders.has(instance)) {
-      instance.register((parser) => new VRMLoaderPlugin(parser));
-      configuredLoaders.add(instance);
+function AvatarModel({ src, speaking, reaction, visemeRef }) {
+  const gltf = useLoader(GLTFLoader, src, (loader) => {
+    if (!configuredLoaders.has(loader)) {
+      loader.register((parser) => new VRMLoaderPlugin(parser));
+      configuredLoaders.add(loader);
     }
   });
   const vrm = gltf.userData.vrm;
@@ -83,91 +86,59 @@ function AvatarModel({ src, speaking, onMouthFallback }) {
     const box = new Box3().setFromObject(scene);
     const height = Math.max(box.getSize(new Vector3()).y, 0.01);
     const scale = 2.5 / height;
+    const center = box.getCenter(new Vector3());
     const morphs = [];
+    const blinkMorphs = [];
+    const reactionMorphs = [];
     scene.traverse((object) => {
       if (!object.isMesh || !object.morphTargetDictionary || !object.morphTargetInfluences) return;
       Object.entries(object.morphTargetDictionary).forEach(([name, index]) => {
-        if (VISEME_KEYS.some((pattern) => pattern.test(name))) morphs.push({ influences: object.morphTargetInfluences, index, name });
+        if (VISEME_KEYS.some((pattern) => pattern.test(name))) {
+          const vowel = name.match(/(aa|ih|ou|ee|oh|a|i|u|e|o)$/i)?.[1]?.toLowerCase() || null;
+          morphs.push({ influences: object.morphTargetInfluences, index, vowel });
+        }
+        if (/blink|eye.?close/i.test(name)) blinkMorphs.push({ influences: object.morphTargetInfluences, index });
+        if (/happy|smile/i.test(name)) reactionMorphs.push({ influences: object.morphTargetInfluences, index });
       });
     });
     const expressionManager = vrm?.expressionManager;
-    const expressions = expressionManager ? VISEMES.filter((name) => expressionManager.getExpression?.(name)) : [];
+    const expressions = expressionManager ? ['aa', 'ih', 'ou', 'ee', 'oh'].filter((name) => expressionManager.getExpression?.(name)) : [];
     const hasBlink = Boolean(expressionManager?.getExpression?.('blink'));
-    const head = vrm?.humanoid?.getNormalizedBoneNode?.('head') || null;
-    const chest = vrm?.humanoid?.getNormalizedBoneNode?.('chest') || vrm?.humanoid?.getNormalizedBoneNode?.('upperChest') || null;
-    const jaw = vrm?.humanoid?.getNormalizedBoneNode?.('jaw') || null;
+    const hasHappy = Boolean(expressionManager?.getExpression?.('happy'));
+    let namedHead = null;
+    let namedChest = null;
+    let namedJaw = null;
+    scene.traverse((object) => {
+      if (!namedHead && /(head|face)/i.test(object.name) && (object.isBone || object.type === 'Group')) namedHead = object;
+      if (!namedChest && /(chest|upper.?spine|spine2)/i.test(object.name) && object.isBone) namedChest = object;
+      if (!namedJaw && /jaw|mandible/i.test(object.name) && object.isBone) namedJaw = object;
+    });
+    const head = vrm?.humanoid?.getNormalizedBoneNode?.('head') || namedHead;
+    const chest = vrm?.humanoid?.getNormalizedBoneNode?.('chest') || vrm?.humanoid?.getNormalizedBoneNode?.('upperChest') || namedChest;
+    const jaw = vrm?.humanoid?.getNormalizedBoneNode?.('jaw') || namedJaw;
     const mixer = gltf.animations?.length ? new AnimationMixer(scene) : null;
-    return { box, scale, morphs, expressionManager, expressions, hasBlink, head, chest, jaw, mixer };
+    return { scene, box, center, height, scale, morphs, blinkMorphs, reactionMorphs, expressionManager, expressions, hasBlink, hasHappy, head, chest, jaw, baseJawX: jaw?.rotation.x || 0, mixer };
   }, [scene, vrm, gltf.animations]);
-  const startRotations = useRef(null);
-  const blinkUntil = useRef(0);
-  const nextBlink = useRef(2.5);
 
   useEffect(() => {
     retainModel(src, scene);
-    onMouthFallback(resources.expressions.length === 0 && resources.morphs.length === 0 && !resources.jaw);
     resources.mixer?.clipAction(gltf.animations[0]).play();
     return () => {
-      onMouthFallback(false);
       resources.mixer?.stopAllAction();
       if (resources.mixer) resources.mixer.uncacheRoot(scene);
       releaseModel(src, scene);
     };
-  }, [gltf.animations, onMouthFallback, resources, scene, src]);
-
-  useFrame(({ clock }, delta) => {
-    const elapsed = clock.getElapsedTime();
-    vrm?.update?.(delta);
-    resources.mixer?.update(delta);
-    if (!startRotations.current) startRotations.current = {
-      headY: resources.head?.rotation.y || 0,
-      headX: resources.head?.rotation.x || 0,
-      chestX: resources.chest?.rotation.x || 0,
-      jawX: resources.jaw?.rotation.x || 0,
-    };
-    const base = startRotations.current;
-    if (resources.head) {
-      resources.head.rotation.y = base.headY + Math.sin(elapsed * 0.47) * 0.035;
-      resources.head.rotation.x = base.headX + Math.sin(elapsed * 0.7) * 0.012;
-    }
-    if (resources.chest) resources.chest.rotation.x = base.chestX + Math.sin(elapsed * 1.5) * 0.012;
-
-    if (elapsed > nextBlink.current) {
-      blinkUntil.current = elapsed + 0.13;
-      nextBlink.current = elapsed + 2.5 + Math.random() * 2.5;
-    }
-    const blink = elapsed < blinkUntil.current ? Math.sin(((blinkUntil.current - elapsed) / 0.13) * Math.PI) : 0;
-    if (resources.hasBlink) resources.expressionManager.setValue('blink', Math.max(0, blink));
-
-    let mouth = 0;
-    let vowelIndex = 0;
-    if (speaking) {
-      const pulse = Math.sin(elapsed * 11.5);
-      mouth = MathUtils.clamp(0.12 + Math.max(0, pulse) * 0.7, 0, 0.85);
-      vowelIndex = Math.floor((elapsed * 3.2) % VISEMES.length);
-    }
-    if (resources.expressions.length) {
-      resources.expressions.forEach((name) => resources.expressionManager.setValue(name, speaking && name === VISEMES[vowelIndex] ? mouth : 0));
-    }
-    resources.morphs.forEach(({ influences, index, name }) => {
-      const vowel = name.match(/(aa|ih|ou|ee|oh|a|i|u|e|o)$/i)?.[1]?.toLowerCase();
-      const selected = vowel ? vowel === VISEMES[vowelIndex] || vowel === ['a', 'i', 'u', 'e', 'o'][vowelIndex] : true;
-      influences[index] = speaking && selected ? mouth : 0;
-    });
-    if (!resources.expressions.length && !resources.morphs.length && resources.jaw) {
-      resources.jaw.rotation.x = base.jawX + (speaking ? mouth * 0.13 : 0);
-    }
-  });
+  }, [gltf.animations, resources, scene, src]);
 
   return <group position={[0, -resources.box.min.y * resources.scale, 0]} scale={resources.scale}>
     <primitive object={scene} dispose={null} />
+    <AvatarController vrm={vrm} resources={resources} reaction={reaction} />
+    <AvatarLipSync resources={resources} speaking={speaking} visemeRef={visemeRef} />
   </group>;
 }
 
-export default function InterviewerAvatar({ speaking = false, modelUrl = '/avatar/anaya.vrm' }) {
-  const [mouthFallback, setMouthFallback] = useState(false);
+export default function InterviewerAvatar({ speaking = false, reaction = 'neutral', visemeRef, modelUrl = '/avatar/anaya.vrm' }) {
   const [modelState, setModelState] = useState('checking');
-  const setFallback = useMemo(() => (enabled) => setMouthFallback(enabled), []);
   useEffect(() => {
     let active = true;
     setModelState('checking');
@@ -176,22 +147,19 @@ export default function InterviewerAvatar({ speaking = false, modelUrl = '/avata
       .catch(() => { if (active) setModelState('missing'); });
     return () => { active = false; };
   }, [modelUrl]);
-  const fallback = <FallbackPortrait speaking={speaking} message={modelState === 'checking' ? 'Loading Anaya 3D model…' : '3D model not added yet'} />;
-  const canvasFallback = <FallbackPortrait speaking={speaking} message="3D rendering is unavailable in this browser" />;
+  const missingModel = <MissingModel message={modelState === 'checking' ? 'Checking for the local VRM model…' : modelState === 'error' ? 'The model could not be loaded.' : 'Add a licensed VRM or GLB model to enable the 3D interviewer.'} />;
 
   return <section className="ai-interviewer-identity" aria-label="AI interviewer Anaya">
     <div className={`ai-interviewer-avatar ${speaking ? 'is-speaking' : ''}`}>
       <div className="ai-avatar-halo" />
-      {modelState !== 'ready' ? fallback : <ModelBoundary fallback={<FallbackPortrait speaking={speaking} message="Could not load the 3D model" />} onError={() => setModelState('missing')}>
-        <Canvas className="ai-avatar-canvas" fallback={canvasFallback} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.75, 3.45], fov: 36 }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
+      {modelState !== 'ready' ? missingModel : <ModelBoundary fallback={<MissingModel message="The local 3D model could not be rendered." />} onError={() => setModelState('error')}>
+        <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.75, 3.45], fov: 36 }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
           <ambientLight intensity={1.35} />
           <directionalLight position={[2, 3, 4]} intensity={2} />
           <directionalLight position={[-2, 1, -2]} intensity={0.65} color="#aa9aff" />
-          <Suspense fallback={<AvatarLoading />}><AvatarModel key={modelUrl} src={modelUrl} speaking={speaking} onMouthFallback={setFallback} /></Suspense>
+          <Suspense fallback={<AvatarLoading />}><AvatarModel key={modelUrl} src={modelUrl} speaking={speaking} reaction={reaction} visemeRef={visemeRef} /></Suspense>
         </Canvas>
       </ModelBoundary>}
-      {mouthFallback && modelState === 'ready' && <span className={`ai-avatar-mouth-fallback ${speaking ? 'is-speaking' : ''}`} aria-hidden="true" />}
-      <div className="ai-avatar-spark" aria-hidden="true">✦</div>
       <span className={`ai-avatar-speaking-indicator ${speaking ? 'is-active' : ''}`} aria-hidden="true"><i /><i /><i /><i /><i /></span>
     </div>
     <div className="ai-interviewer-label"><strong>Anaya</strong><span>AI Interviewer</span>{speaking && <span className="ai-avatar-speaking-caption">Speaking</span>}</div>

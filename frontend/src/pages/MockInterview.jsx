@@ -106,6 +106,7 @@ export default function MockInterview() {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [voiceInput, setVoiceInput] = useState(false);
   const [aiSpeaking, setAiSpeaking] = useState(false);
+  const avatarVisemeRef = useRef(null);
   const [liveFeedbacks, setLiveFeedbacks] = useState([]);
   const [interviewReport, setInterviewReport] = useState(null);
   const [reportError, setReportError] = useState('');
@@ -160,9 +161,13 @@ export default function MockInterview() {
     utterance.lang = utterance.voice?.lang || 'en-IN';
     utterance.rate = 0.96;
     utterance.pitch = 1.02;
-    utterance.onstart = () => setAiSpeaking(true);
-    utterance.onend = () => { setAiSpeaking(false); if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true); };
-    utterance.onerror = () => { setAiSpeaking(false); if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true); };
+    utterance.onstart = () => { avatarVisemeRef.current = null; setAiSpeaking(true); };
+    utterance.onboundary = (event) => {
+      const vowel = text.slice(Math.max(0, event.charIndex || 0), Math.max(0, event.charIndex || 0) + 12).toLowerCase().match(/[aeiou]/)?.[0];
+      avatarVisemeRef.current = ({ a: 'aa', i: 'ih', u: 'ou', e: 'ee', o: 'oh' })[vowel] || null;
+    };
+    utterance.onend = () => { avatarVisemeRef.current = null; setAiSpeaking(false); if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true); };
+    utterance.onerror = () => { avatarVisemeRef.current = null; setAiSpeaking(false); if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true); };
     window.speechSynthesis.speak(utterance);
   };
 
@@ -230,6 +235,7 @@ export default function MockInterview() {
     const answer = value.trim();
     if (!answer || callBusy || !callActiveRef.current) return;
     window.speechSynthesis?.cancel();
+    avatarVisemeRef.current = null;
     voiceTurnRef.current += 1;
     window.clearTimeout(voiceSilenceTimerRef.current);
     const minutesRemaining = Math.ceil(callSeconds / 60);
@@ -350,6 +356,7 @@ export default function MockInterview() {
     speechRecognitionRef.current?.stop();
     speechRecognitionRef.current = null;
     window.speechSynthesis?.cancel();
+    avatarVisemeRef.current = null;
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
     setCameraEnabled(false);
@@ -388,6 +395,7 @@ export default function MockInterview() {
     callAbortRef.current?.abort();
     speechRecognitionRef.current?.stop();
     window.speechSynthesis?.cancel();
+    avatarVisemeRef.current = null;
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
@@ -465,7 +473,7 @@ export default function MockInterview() {
       <div className="ai-call-layout">
         <section className="ai-call-stage" aria-label="Video interview">
           <div className="ai-stage-glow" />
-          <Suspense fallback={<div className="ai-interviewer-placeholder" role="status">Preparing Anaya…</div>}><InterviewerAvatar speaking={aiSpeaking} /></Suspense>
+          <Suspense fallback={<div className="ai-interviewer-placeholder" role="status">Preparing Anaya…</div>}><InterviewerAvatar speaking={aiSpeaking} visemeRef={avatarVisemeRef} reaction={voiceInput ? 'attentive' : latestLiveFeedback?.score >= 75 ? 'positive' : 'neutral'} /></Suspense>
           <div className="ai-self-video">{cameraEnabled && mediaStreamRef.current ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera preview" /> : <div className="ai-camera-off"><CameraOff size={22}/><span>Camera off</span></div>}<span className="ai-self-video-label">You</span></div>
           <div className="ai-call-controls"><div className={`ai-voice-status ${voiceInput ? 'is-listening' : aiSpeaking ? 'is-speaking' : ''}`}><Mic size={17}/><span>{aiSpeaking ? 'PrepBot is speaking' : callBusy ? 'Preparing your next question' : autoVoiceRef.current ? 'Speak naturally — it listens automatically' : 'Type your answer below'}</span></div><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
           <p className="ai-call-privacy">Camera preview is local and is not recorded or sent.</p>

@@ -6,5 +6,5 @@ also accepts a GLB by passing `modelUrl="/avatar/anaya.glb"` to `InterviewerAvat
 
 For facial lip-sync, choose a VRM model with the standard `aa`, `ih`, `ou`, `ee`,
 and `oh` expressions (and `blink` if available). Without facial expressions, the
-component falls back to morph targets, a jaw bone, and finally a small visual
-mouth animation. No model is bundled or fetched from a remote URL.
+component falls back to morph targets, a jaw bone, and finally a small Three.js
+mouth mesh attached to the head. No model is bundled or fetched from a remote URL.
