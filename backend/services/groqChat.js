@@ -1,4 +1,4 @@
-import { MOCK_INTERVIEW_INSTRUCTIONS, PREPBOT_INSTRUCTIONS } from './chatInstructions.js';
+import { MOCK_INTERVIEW_FEEDBACK_INSTRUCTIONS, MOCK_INTERVIEW_INSTRUCTIONS, PREPBOT_INSTRUCTIONS } from './chatInstructions.js';
 
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
 const GROQ_CHAT_URL = `${GROQ_BASE_URL}/chat/completions`;
@@ -20,7 +20,7 @@ function readEvent(block) {
   try { return JSON.parse(payload); } catch { return null; }
 }
 
-async function requestGroqChatWithModel(messages, model, { stream, signal, onDelta, interviewMode }) {
+async function requestGroqChatWithModel(messages, model, { stream, signal, onDelta, interviewMode, interviewFeedbackMode }) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     const error = new Error('Groq is not configured. Add GROQ_API_KEY to backend/.env and restart the API.');
@@ -39,7 +39,7 @@ async function requestGroqChatWithModel(messages, model, { stream, signal, onDel
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: interviewMode ? MOCK_INTERVIEW_INSTRUCTIONS : PREPBOT_INSTRUCTIONS },
+        { role: 'system', content: interviewFeedbackMode ? MOCK_INTERVIEW_FEEDBACK_INSTRUCTIONS : interviewMode ? MOCK_INTERVIEW_INSTRUCTIONS : PREPBOT_INSTRUCTIONS },
         ...messages,
       ],
       stream,
@@ -89,14 +89,14 @@ async function requestGroqChatWithModel(messages, model, { stream, signal, onDel
   return content.trim();
 }
 
-export async function requestGroqChat(messages, { stream, signal, onDelta, interviewMode = false }) {
+export async function requestGroqChat(messages, { stream, signal, onDelta, interviewMode = false, interviewFeedbackMode = false }) {
   const candidateModels = [process.env.GROQ_MODEL, DEFAULT_GROQ_MODEL, ...FALLBACK_GROQ_MODELS].filter(Boolean);
   const uniqueModels = [...new Set(candidateModels)];
 
   let lastError = null;
   for (const model of uniqueModels) {
     try {
-      return await requestGroqChatWithModel(messages, model, { stream, signal, onDelta, interviewMode });
+      return await requestGroqChatWithModel(messages, model, { stream, signal, onDelta, interviewMode, interviewFeedbackMode });
     } catch (error) {
       lastError = error;
       if (error?.status !== 404 && error?.status !== 400) throw error;

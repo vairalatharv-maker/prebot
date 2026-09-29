@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Camera, CameraOff, Check, Clock3, Mic, MicOff, PhoneOff, RotateCcw, Send, ShieldCheck, Sparkles, Target, Trophy, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, CameraOff, Check, Clock3, Mic, PhoneOff, RotateCcw, Send, ShieldCheck, Sparkles, Target, Trophy, Volume2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import SectionArtwork from '../components/SectionArtwork.jsx';
 import { buildInterviewQuestions, INTERVIEW_FORMATS, INTERVIEW_LEVELS, INTERVIEW_ROLES } from './interviewQuestions.js';
@@ -10,12 +10,46 @@ import { streamChat } from '../services/chat.js';
 const ANSWER_SECONDS = 150;
 const AI_INTERVIEW_SECONDS = 15 * 60;
 const SESSION_KEY = (userId) => `prepbot.mockinterview.latest.${userId || 'session'}`;
+const AI_HISTORY_KEY = (userId) => `prepbot.mockinterview.history.${userId || 'session'}`;
+
+function parseInterviewTurn(content) {
+  try {
+    const clean = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    const value = JSON.parse(clean);
+    return { speech: typeof value.say === 'string' ? value.say : content, feedback: value.live_feedback && typeof value.live_feedback === 'object' ? value.live_feedback : null };
+  } catch { return { speech: content, feedback: null }; }
+}
+
+function parseInterviewReport(content) {
+  try {
+    const clean = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    const value = JSON.parse(clean);
+    const score = (candidate) => Number.isFinite(Number(candidate)) ? Math.max(0, Math.min(100, Math.round(Number(candidate)))) : null;
+    return {
+      overall_score: score(value.overall_score),
+      communication_score: score(value.communication_score),
+      role_skills_score: score(value.role_skills_score),
+      answer_structure_score: score(value.answer_structure_score),
+      summary: typeof value.summary === 'string' ? value.summary : 'Review the notes below to plan your next practice session.',
+      strengths: Array.isArray(value.strengths) ? value.strengths.filter((item) => typeof item === 'string').slice(0, 5) : [],
+      gaps: Array.isArray(value.gaps) ? value.gaps.filter((item) => typeof item === 'string').slice(0, 5) : [],
+      preparation_plan: Array.isArray(value.preparation_plan) ? value.preparation_plan.filter((item) => item && typeof item === 'object').slice(0, 5) : [],
+    };
+  } catch { return null; }
+}
 
 function parseSaved(userId) {
   try {
     const session = JSON.parse(localStorage.getItem(SESSION_KEY(userId)) || 'null');
     return session && typeof session === 'object' && Array.isArray(session.questions) ? session : null;
   } catch { return null; }
+}
+
+function readAiHistory(userId) {
+  try {
+    const history = JSON.parse(localStorage.getItem(AI_HISTORY_KEY(userId)) || '[]');
+    return Array.isArray(history) ? history : [];
+  } catch { return []; }
 }
 
 function formatClock(totalSeconds) {
@@ -66,6 +100,11 @@ export default function MockInterview() {
   const [callNotice, setCallNotice] = useState('');
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [voiceInput, setVoiceInput] = useState(false);
+  const [aiSpeaking, setAiSpeaking] = useState(false);
+  const [liveFeedbacks, setLiveFeedbacks] = useState([]);
+  const [interviewReport, setInterviewReport] = useState(null);
+  const [reportError, setReportError] = useState('');
+  const [historyWarning, setHistoryWarning] = useState(false);
   const videoRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const speechRecognitionRef = useRef(null);
@@ -85,6 +124,7 @@ export default function MockInterview() {
   const currentFormat = INTERVIEW_FORMATS.find((item) => item.id === format);
   const currentLevel = INTERVIEW_LEVELS.find((item) => item.id === level);
   const currentChecks = checks[questionIndex] || [];
+  const latestLiveFeedback = liveFeedbacks.at(-1) || null;
   const progressPercent = questions.length ? (questionIndex + (phase === 'review' ? 1 : 0)) / questions.length * 100 : 0;
 
   const beginSession = () => {
@@ -102,6 +142,7 @@ export default function MockInterview() {
   const speakInterviewer = (text) => {
     if (!text) return;
     if (!('speechSynthesis' in window)) {
+      setAiSpeaking(false);
       if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true);
       return;
     }
@@ -109,7 +150,9 @@ export default function MockInterview() {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.96;
     utterance.pitch = 1.02;
-    utterance.onend = () => { if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true); };
+    utterance.onstart = () => setAiSpeaking(true);
+    utterance.onend = () => { setAiSpeaking(false); if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true); };
+    utterance.onerror = () => { setAiSpeaking(false); if (autoVoiceRef.current) startVoiceAnswerRef.current?.(true); };
     window.speechSynthesis.speak(utterance);
   };
 
@@ -118,16 +161,14 @@ export default function MockInterview() {
     callAbortRef.current = controller;
     setCallBusy(true);
     setCallError('');
-    let streamed = '';
     try {
-      const reply = await streamChat({ messages: history, token, signal: controller.signal, interviewMode: true, onDelta: (delta) => {
-        streamed += delta;
-        setCallMessages((current) => current.map((message, index) => index === current.length - 1 ? { ...message, content: streamed } : message));
-      } });
+      const reply = await streamChat({ messages: history, token, signal: controller.signal, interviewMode: true, onDelta: () => {} });
+      const turn = parseInterviewTurn(reply.content);
       const completedHistory = [...history, reply];
       callHistoryRef.current = completedHistory;
-      setCallMessages((current) => current.map((message, index) => index === current.length - 1 ? reply : message));
-      speakInterviewer(reply.content);
+      setCallMessages((current) => current.map((message, index) => index === current.length - 1 ? { role: 'assistant', content: turn.speech } : message));
+      if (turn.feedback) setLiveFeedbacks((current) => [...current, { ...turn.feedback, answerCount: callHistoryRef.current.filter((message) => message.role === 'user').length - 1 }]);
+      speakInterviewer(turn.speech);
     } catch (error) {
       if (error.name !== 'AbortError') setCallError(error.message || 'The interviewer could not respond. Try again.');
     } finally {
@@ -150,6 +191,11 @@ export default function MockInterview() {
     setCameraEnabled(Boolean(stream?.getVideoTracks().length));
     setCallSeconds(AI_INTERVIEW_SECONDS);
     callDeadlineRef.current = Date.now() + AI_INTERVIEW_SECONDS * 1000;
+    setLiveFeedbacks([]);
+    setInterviewReport(null);
+    setReportError('');
+    setHistoryWarning(false);
+    setAiSpeaking(false);
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     autoVoiceRef.current = Boolean(Recognition);
     if (!Recognition) setCallNotice('For a fully voice-led interview, open this page in Chrome. You can still type your answers here.');
@@ -222,6 +268,50 @@ export default function MockInterview() {
     setCameraEnabled(track.enabled);
   };
 
+  const evaluateAiInterview = useCallback(async (summary) => {
+    setMode('ai-evaluating');
+    const transcript = summary.slice(-24).map((message) => `${message.role === 'user' ? 'CANDIDATE' : 'INTERVIEWER'}: ${message.content}`).join('\n');
+    const transcriptPrompt = `Assess this completed ${format} mock interview for a ${level} ${role} role. Use only the candidate's answers. Transcript:\n${transcript.slice(-5600)}`;
+    let report = null;
+    try {
+      const reply = await streamChat({ messages: [{ role: 'user', content: transcriptPrompt }], token, interviewFeedbackMode: true, onDelta: () => {} });
+      report = parseInterviewReport(reply.content);
+      if (!report) throw new Error('The AI feedback report could not be read.');
+    } catch (error) {
+      const scores = liveFeedbacks.map((item) => Number(item.score)).filter((score) => Number.isFinite(score));
+      const gaps = [...new Set(liveFeedbacks.map((item) => item.improve).filter((item) => typeof item === 'string' && item.trim()))].slice(0, 5);
+      report = {
+        overall_score: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null,
+        communication_score: null,
+        role_skills_score: null,
+        answer_structure_score: null,
+        summary: 'The full report could not be generated. Your live interviewer feedback is included below.',
+        strengths: [...new Set(liveFeedbacks.map((item) => item.strength).filter(Boolean))].slice(0, 5),
+        gaps,
+        preparation_plan: liveFeedbacks.filter((item) => item.practice).slice(-4).map((item) => ({ focus: item.improve || 'Interview practice', why: item.strength || 'From your live interview answers', practice: item.practice, time: '15 minutes' })),
+      };
+      setReportError(error.message || 'The full AI report was unavailable. Showing live interview feedback instead.');
+    }
+    const record = {
+      completedAt: new Date().toISOString(),
+      role,
+      level,
+      format,
+      durationSeconds: Math.max(0, AI_INTERVIEW_SECONDS - callSeconds),
+      answers: summary.filter((message) => message.role === 'user').length,
+      report,
+      liveFeedbacks,
+      transcript: summary,
+    };
+    try {
+      const history = [record, ...readAiHistory(userId)].slice(0, 20);
+      localStorage.setItem(AI_HISTORY_KEY(userId), JSON.stringify(history));
+      localStorage.setItem(SESSION_KEY(userId), JSON.stringify({ ...record, aiInterview: true }));
+    } catch { setHistoryWarning(true); }
+    setInterviewReport(report);
+    setMode('ai-results');
+  }, [token, userId, role, level, format, liveFeedbacks, callSeconds]);
+
   const endAiInterview = () => {
     callActiveRef.current = false;
     callAbortRef.current?.abort();
@@ -233,9 +323,11 @@ export default function MockInterview() {
     mediaStreamRef.current = null;
     setCameraEnabled(false);
     setVoiceInput(false);
-    setAiSessionSummary(callMessagesRef.current.filter((message) => message.content));
+    setAiSpeaking(false);
+    const summary = callMessagesRef.current.filter((message) => message.content);
+    setAiSessionSummary(summary);
     setCallMessages([]);
-    setMode('ai-results');
+    void evaluateAiInterview(summary);
   };
   endAiInterviewRef.current = endAiInterview;
 
@@ -340,13 +432,14 @@ export default function MockInterview() {
         <section className="ai-call-stage" aria-label="Video interview">
           <div className="ai-stage-glow" />
           <div className={`ai-interviewer-avatar ${callBusy ? 'is-speaking' : ''}`} aria-label="AI interviewer avatar"><div className="ai-avatar-halo"/><div className="ai-avatar-head"><span className="ai-avatar-hair"/><span className="ai-avatar-eye eye-left"/><span className="ai-avatar-eye eye-right"/><span className="ai-avatar-nose"/><span className="ai-avatar-smile"/></div><div className="ai-avatar-shoulders"/><div className="ai-avatar-spark"><Sparkles size={17}/></div></div>
-          <div className="ai-interviewer-label"><strong>PrepBot</strong><span>{callBusy ? 'Thinking…' : 'AI interviewer'}</span>{!callBusy && <Volume2 size={14}/>}</div>
+          <div className="ai-interviewer-label"><strong>PrepBot</strong><span>{aiSpeaking ? 'Speaking…' : voiceInput ? 'Listening…' : callBusy ? 'Thinking…' : 'AI interviewer'}</span>{aiSpeaking && <Volume2 size={14}/>}</div>
           <div className="ai-self-video">{cameraEnabled && mediaStreamRef.current ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera preview" /> : <div className="ai-camera-off"><CameraOff size={22}/><span>Camera off</span></div>}<span className="ai-self-video-label">You</span></div>
-          <div className="ai-call-controls"><button type="button" className={`ai-control ${voiceInput ? 'is-active' : ''}`} onClick={startVoiceAnswer} disabled={callBusy} aria-label={voiceInput ? 'Stop voice input' : 'Answer by voice'} title={voiceInput ? 'Stop voice input' : 'Answer by voice'}>{voiceInput ? <MicOff size={18}/> : <Mic size={18}/>}<span>{voiceInput ? 'Listening' : 'Voice answer'}</span></button><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
+          <div className="ai-call-controls"><div className={`ai-voice-status ${voiceInput ? 'is-listening' : aiSpeaking ? 'is-speaking' : ''}`}><Mic size={17}/><span>{voiceInput ? 'Listening automatically — speak naturally' : aiSpeaking ? 'PrepBot is speaking' : callBusy ? 'Preparing your next question' : 'Voice interview · no button needed'}</span></div><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
           <p className="ai-call-privacy">Camera preview is local and is not recorded or sent.</p>
         </section>
         <aside className="ai-call-transcript">
           <div className="ai-transcript-heading"><div><span className="interview-kicker">LIVE TRANSCRIPT</span><h2>Interview conversation</h2></div><span className="ai-transcript-count">{callMessages.filter((message) => message.role === 'user').length} answers</span></div>
+          <section className="ai-live-feedback" aria-live="polite"><div className="ai-live-feedback-title"><span className="interview-kicker">LIVE INTERVIEW FEEDBACK</span>{latestLiveFeedback?.score !== undefined && <strong>{latestLiveFeedback.score}/100</strong>}</div>{latestLiveFeedback ? <><p><b>Working well:</b> {latestLiveFeedback.strength || 'Keep explaining your thinking clearly.'}</p><p><b>Improve:</b> {latestLiveFeedback.improve || 'Your answer covered the main point. Add a specific example when useful.'}</p><small><Target size={12}/> Try next: {latestLiveFeedback.practice || 'Support your answer with a concrete example.'}</small></> : <p>Your interviewer will share a quick strength and one improvement after your first answer.</p>}</section>
           <div className="ai-transcript-list" aria-live="polite">{callMessages.map((message, index) => <article className={`ai-transcript-message ${message.role === 'user' ? 'candidate-message' : 'interviewer-message'}`} key={`${message.role}-${index}`}><span>{message.role === 'user' ? 'YOU' : 'PREPBOT'}</span><p>{message.content || (callBusy && index === callMessages.length - 1 ? 'Preparing the next question…' : '')}</p></article>)}{!callMessages.length && <p className="ai-transcript-empty">Your interview conversation will appear here.</p>}</div>
           {callError && <div className="ai-call-error" role="alert"><span>{callError}</span><button type="button" onClick={() => { const history = callHistoryRef.current; if (history.at(-1)?.role === 'user') void receiveInterviewer(history); }}>Retry</button></div>}
           {callNotice && <p className="ai-call-notice" role="status">{callNotice}</p>}
@@ -356,7 +449,16 @@ export default function MockInterview() {
       </div>
     </main>}
 
-    {mode === 'ai-results' && <main className="interview-results"><section className="interview-result-hero"><span className="interview-result-trophy"><Check size={22}/></span><div><span className="interview-kicker">VIDEO INTERVIEW COMPLETE</span><h2>Good work showing up.</h2><p>You completed a call-style practice interview with PrepBot. Review your conversation or start another round.</p></div><div className="interview-result-count"><strong>{aiSessionSummary.filter((message) => message.role === 'user').length}<span> turns</span></strong><small>answers shared</small></div></section><section className="interview-answer-summary ai-results-transcript"><div className="interview-summary-heading"><span className="interview-kicker">INTERVIEW TRANSCRIPT</span><button type="button" onClick={startAiInterview}><RotateCcw size={13}/> New AI interview</button></div>{aiSessionSummary.map((message, index) => <article className="interview-summary-item" key={`${message.role}-${index}`}><span className="interview-summary-number">{message.role === 'user' ? 'YOU' : 'AI'}</span><div><span>{message.role === 'user' ? 'Your answer' : 'PrepBot interviewer'}</span><p>{message.content}</p></div></article>)}</section><footer className="interview-result-actions"><p><ShieldCheck size={15}/> Camera video was not recorded or saved.</p><button type="button" className="primary-button interview-start-button" onClick={() => setMode('setup')}>Back to interview setup <ArrowRight size={15}/></button></footer></main>}
+    {mode === 'ai-evaluating' && <main className="ai-evaluation-loading"><span className="ai-evaluation-loader"><Sparkles size={24}/></span><span className="interview-kicker">INTERVIEW FINISHED</span><h2>Reviewing your answers…</h2><p>PrepBot is finding your strengths, improvement areas, and the best next steps for your preparation.</p></main>}
+
+    {mode === 'ai-results' && <main className="interview-results"><section className="interview-result-hero"><span className="interview-result-trophy"><Check size={22}/></span><div><span className="interview-kicker">VIDEO INTERVIEW COMPLETE</span><h2>Your interview growth report</h2><p>{interviewReport?.summary || 'Review the feedback and use your next practice session to strengthen one area at a time.'}</p></div><div className="interview-result-count"><strong>{interviewReport?.overall_score ?? '—'}<span>{interviewReport?.overall_score === null ? '' : '/100'}</span></strong><small>practice score</small></div></section>
+      {reportError && <p className="interview-storage-warning" role="status">{reportError}</p>}
+      <section className="ai-report-score-grid">{[['Overall interview', interviewReport?.overall_score], ['Communication', interviewReport?.communication_score], ['Role knowledge', interviewReport?.role_skills_score], ['Answer structure', interviewReport?.answer_structure_score]].map(([label, value]) => <article key={label}><span>{label}</span><strong>{value ?? '—'}{value === null || value === undefined ? '' : '%'}</strong><div><i style={{ width: `${value ?? 0}%` }}/></div></article>)}</section>
+      <section className="ai-report-insights"><article className="ai-report-panel"><span className="interview-kicker">WHAT YOU DID WELL</span><h3>Strengths to keep</h3>{interviewReport?.strengths?.length ? <ul>{interviewReport.strengths.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul> : <p>Complete more interview answers to identify recurring strengths.</p>}</article><article className="ai-report-panel ai-report-gaps"><span className="interview-kicker">AREAS TO IMPROVE</span><h3>Where to focus next</h3>{interviewReport?.gaps?.length ? <ul>{interviewReport.gaps.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul> : <p>No clear gap was identified from this short practice session. Keep building consistency.</p>}</article></section>
+      <section className="ai-report-panel ai-preparation-plan"><div><span className="interview-kicker">YOUR PREPARATION PLAN</span><h3>Concrete next steps</h3></div>{interviewReport?.preparation_plan?.length ? interviewReport.preparation_plan.map((item, index) => <article key={`${item.focus}-${index}`}><span className="ai-plan-number">{String(index + 1).padStart(2, '0')}</span><div><h4>{item.focus || 'Focused practice'}</h4><p>{item.why}</p><strong>{item.practice}</strong></div><small>{item.time}</small></article>) : <p>Practice a few more questions to build a detailed preparation plan.</p>}</section>
+      <section className="interview-answer-summary ai-results-transcript"><div className="interview-summary-heading"><span className="interview-kicker">INTERVIEW TRANSCRIPT</span><button type="button" onClick={startAiInterview}><RotateCcw size={13}/> New AI interview</button></div>{aiSessionSummary.map((message, index) => <article className="interview-summary-item" key={`${message.role}-${index}`}><span className="interview-summary-number">{message.role === 'user' ? 'YOU' : 'AI'}</span><div><span>{message.role === 'user' ? 'Your answer' : 'PrepBot interviewer'}</span><p>{message.content}</p></div></article>)}</section>
+      {historyWarning && <p className="interview-storage-warning" role="status">Your report is visible now, but browser storage could not save it to dashboard history.</p>}
+      <footer className="interview-result-actions"><p><ShieldCheck size={15}/> Scores are practice estimates based on your spoken answer transcripts; no video is recorded.</p><button type="button" className="primary-button interview-start-button" onClick={() => setMode('setup')}>Back to interview setup <ArrowRight size={15}/></button></footer></main>}
 
     {mode === 'interview' && currentQuestion && <main className="interview-session">
       <div className="interview-session-top"><div><span className={`interview-kind-tag ${currentQuestion.kind}`}>{currentQuestion.kind === 'technical' ? 'TECHNICAL' : 'BEHAVIORAL'} ROUND</span><span className="interview-session-topic">{currentQuestion.topic}</span></div><span className="interview-count">Question {questionIndex + 1} of {questions.length}</span></div>

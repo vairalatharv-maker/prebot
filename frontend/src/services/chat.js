@@ -14,12 +14,12 @@ function parseSseBlock(block) {
   try { return JSON.parse(data); } catch { return null; }
 }
 
-export async function streamChat({ messages, token, signal, onDelta, interviewMode = false }) {
+export async function streamChat({ messages, token, signal, onDelta, interviewMode = false, interviewFeedbackMode = false }) {
   const response = await fetch(`${API_URL}/chat`, {
     method: 'POST',
     signal,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'text/event-stream, application/json' },
-    body: JSON.stringify({ messages: compactHistory(messages), stream: true, interviewMode }),
+    body: JSON.stringify({ messages: compactHistory(messages), stream: true, interviewMode, interviewFeedbackMode }),
   });
 
   const contentType = response.headers.get('content-type') || '';
