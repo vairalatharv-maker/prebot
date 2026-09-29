@@ -17,6 +17,7 @@ export default function AvatarController({ vrm, resources, reaction = 'neutral' 
       chestY: resources.chest?.position.y || 0,
       jawX: resources.jaw?.rotation.x || 0,
     };
+    resources.armPose?.forEach(({ bone, base, offset }) => bone.quaternion.copy(base).multiply(offset));
     if (resources.head) {
       const nod = reaction === 'positive' ? Math.max(0, Math.sin(elapsed * 5)) * 0.035 : 0;
       const attentiveLean = reaction === 'attentive' ? 0.012 : 0;
