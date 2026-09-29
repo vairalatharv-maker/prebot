@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Camera, CameraOff, Check, Clock3, Mic, PhoneOff, RotateCcw, Send, ShieldCheck, Sparkles, Target, Trophy, Volume2 } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, Camera, CameraOff, Check, Clock3, Mic, PhoneOff, RotateCcw, Send, ShieldCheck, Sparkles, Target, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import SectionArtwork from '../components/SectionArtwork.jsx';
 import { buildInterviewQuestions, INTERVIEW_FORMATS, INTERVIEW_LEVELS, INTERVIEW_ROLES } from './interviewQuestions.js';
@@ -11,6 +11,7 @@ const ANSWER_SECONDS = 150;
 const AI_INTERVIEW_SECONDS = 15 * 60;
 const SESSION_KEY = (userId) => `prepbot.mockinterview.latest.${userId || 'session'}`;
 const AI_HISTORY_KEY = (userId) => `prepbot.mockinterview.history.${userId || 'session'}`;
+const InterviewerAvatar = lazy(() => import('../components/InterviewerAvatar.jsx'));
 
 function parseInterviewTurn(content) {
   try {
@@ -464,8 +465,7 @@ export default function MockInterview() {
       <div className="ai-call-layout">
         <section className="ai-call-stage" aria-label="Video interview">
           <div className="ai-stage-glow" />
-          <div className={`ai-interviewer-avatar ${aiSpeaking ? 'is-speaking' : ''}`} aria-label="Anaya, virtual AI interviewer"><div className="ai-avatar-halo"/><img className="ai-interviewer-portrait" src="/images/prepbot-interviewer.png" alt="Anaya, your virtual AI interviewer"/><div className="ai-avatar-spark"><Sparkles size={17}/></div><span className="ai-avatar-speaking-indicator" aria-hidden="true"><i/><i/><i/><i/><i/></span></div>
-          <div className="ai-interviewer-label"><strong>Anaya</strong><span>{aiSpeaking ? 'Speaking…' : voiceInput ? 'Listening…' : callBusy ? 'Thinking…' : 'AI interviewer'}</span>{aiSpeaking && <Volume2 size={14}/>}</div>
+          <Suspense fallback={<div className="ai-interviewer-placeholder" role="status">Preparing Anaya…</div>}><InterviewerAvatar speaking={aiSpeaking} /></Suspense>
           <div className="ai-self-video">{cameraEnabled && mediaStreamRef.current ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera preview" /> : <div className="ai-camera-off"><CameraOff size={22}/><span>Camera off</span></div>}<span className="ai-self-video-label">You</span></div>
           <div className="ai-call-controls"><div className={`ai-voice-status ${voiceInput ? 'is-listening' : aiSpeaking ? 'is-speaking' : ''}`}><Mic size={17}/><span>{aiSpeaking ? 'PrepBot is speaking' : callBusy ? 'Preparing your next question' : autoVoiceRef.current ? 'Speak naturally — it listens automatically' : 'Type your answer below'}</span></div><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
           <p className="ai-call-privacy">Camera preview is local and is not recorded or sent.</p>
