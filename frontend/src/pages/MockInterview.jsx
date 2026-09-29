@@ -133,6 +133,12 @@ export default function MockInterview() {
   const currentLevel = INTERVIEW_LEVELS.find((item) => item.id === level);
   const currentChecks = checks[questionIndex] || [];
   const latestLiveFeedback = liveFeedbacks.at(-1) || null;
+  const latestCallMessage = callMessages.at(-1);
+  const stageMessage = latestCallMessage?.content
+    ? latestCallMessage
+    : latestCallMessage?.role === 'assistant' && callMessages.at(-2)?.role === 'user'
+      ? callMessages.at(-2)
+      : null;
   const progressPercent = questions.length ? (questionIndex + (phase === 'review' ? 1 : 0)) / questions.length * 100 : 0;
 
   const beginSession = () => {
@@ -474,19 +480,21 @@ export default function MockInterview() {
         <section className="ai-call-stage" aria-label="Video interview">
           <div className="ai-stage-glow" />
           <Suspense fallback={<div className="ai-interviewer-placeholder" role="status">Preparing Anaya…</div>}><InterviewerAvatar speaking={aiSpeaking} visemeRef={avatarVisemeRef} reaction={voiceInput ? 'attentive' : latestLiveFeedback?.score >= 75 ? 'positive' : 'neutral'} /></Suspense>
+          <section className={`ai-stage-turn ${stageMessage?.role === 'user' ? 'is-candidate' : ''}`} aria-live="polite" aria-atomic="true">
+            <span>{stageMessage?.role === 'user' ? 'YOU' : 'ANAYA'}</span>
+            <p>{stageMessage?.content || (callBusy ? 'Anaya is preparing her next question…' : 'Your interview conversation will appear here.')}</p>
+          </section>
           <div className="ai-self-video">{cameraEnabled && mediaStreamRef.current ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera preview" /> : <div className="ai-camera-off"><CameraOff size={22}/><span>Camera off</span></div>}<span className="ai-self-video-label">You</span></div>
           <div className="ai-call-controls"><div className={`ai-voice-status ${voiceInput ? 'is-listening' : aiSpeaking ? 'is-speaking' : ''}`}><Mic size={17}/><span>{aiSpeaking ? 'PrepBot is speaking' : callBusy ? 'Preparing your next question' : autoVoiceRef.current ? 'Speak naturally — it listens automatically' : 'Type your answer below'}</span></div><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
           <p className="ai-call-privacy">Camera preview is local and is not recorded or sent.</p>
         </section>
-        <aside className="ai-call-transcript">
-          <div className="ai-transcript-heading"><div><span className="interview-kicker">LIVE TRANSCRIPT</span><h2>Interview conversation</h2></div><span className="ai-transcript-count">{callMessages.filter((message) => message.role === 'user').length} answers</span></div>
-          <section className="ai-live-feedback" aria-live="polite"><div className="ai-live-feedback-title"><span className="interview-kicker">LIVE INTERVIEW FEEDBACK</span>{latestLiveFeedback?.score !== undefined && <strong>{latestLiveFeedback.score}/100</strong>}</div>{latestLiveFeedback ? <><p><b>Working well:</b> {latestLiveFeedback.strength || 'Keep explaining your thinking clearly.'}</p><p><b>Improve:</b> {latestLiveFeedback.improve || 'Your answer covered the main point. Add a specific example when useful.'}</p><small><Target size={12}/> Try next: {latestLiveFeedback.practice || 'Support your answer with a concrete example.'}</small></> : <p>Your interviewer will share a quick strength and one improvement after your first answer.</p>}</section>
-          <div className="ai-transcript-list" aria-live="polite">{callMessages.map((message, index) => <article className={`ai-transcript-message ${message.role === 'user' ? 'candidate-message' : 'interviewer-message'}`} key={`${message.role}-${index}`}><span>{message.role === 'user' ? 'YOU' : 'PREPBOT'}</span><p>{message.content || (callBusy && index === callMessages.length - 1 ? 'Preparing the next question…' : '')}</p></article>)}{!callMessages.length && <p className="ai-transcript-empty">Your interview conversation will appear here.</p>}</div>
+        <section className="ai-call-response-area" aria-label="Interview response and feedback">
+          {latestLiveFeedback && <section className="ai-live-feedback" aria-live="polite"><div className="ai-live-feedback-title"><span className="interview-kicker">LIVE INTERVIEW FEEDBACK</span>{latestLiveFeedback.score !== undefined && <strong>{latestLiveFeedback.score}/100</strong>}</div><p><b>Working well:</b> {latestLiveFeedback.strength || 'Keep explaining your thinking clearly.'}</p><p><b>Improve:</b> {latestLiveFeedback.improve || 'Add a specific example when useful.'}</p><small><Target size={12}/> Try next: {latestLiveFeedback.practice || 'Support your answer with a concrete example.'}</small></section>}
           {callError && <div className="ai-call-error" role="alert"><span>{callError}</span><button type="button" onClick={() => { const history = callHistoryRef.current; if (history.at(-1)?.role === 'user') void receiveInterviewer(history); }}>Retry</button></div>}
           {callNotice && <p className="ai-call-notice" role="status">{callNotice}</p>}
           <form className="ai-answer-composer" onSubmit={(event) => { event.preventDefault(); submitCallAnswer(); }}><textarea rows="2" maxLength="4000" value={callDraft} onChange={(event) => { callDraftRef.current = event.target.value; setCallDraft(event.target.value); }} placeholder={voiceInput ? 'Listening… your words will appear here' : 'Type your answer or use voice input…'} aria-label="Your interview answer" disabled={callBusy}/><button type="submit" disabled={callBusy || !callDraft.trim()} aria-label="Send answer"><Send size={17}/></button></form>
           <p className="ai-answer-note">Your answer text is sent to PrepBot AI to create relevant follow-up questions.</p>
-        </aside>
+        </section>
       </div>
     </main>}
 

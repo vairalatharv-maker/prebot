@@ -143,11 +143,15 @@ export default function InterviewerAvatar({ speaking = false, reaction = 'neutra
     let active = true;
     setModelState('checking');
     fetch(modelUrl, { method: 'HEAD' })
-      .then((response) => { if (active) setModelState(response.ok ? 'ready' : 'missing'); })
+      .then((response) => {
+        const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+        const isModelFile = response.ok && !contentType.includes('text/html');
+        if (active) setModelState(isModelFile ? 'ready' : 'missing');
+      })
       .catch(() => { if (active) setModelState('missing'); });
     return () => { active = false; };
   }, [modelUrl]);
-  const missingModel = <MissingModel message={modelState === 'checking' ? 'Checking for the local VRM model…' : modelState === 'error' ? 'The model could not be loaded.' : 'Add a licensed VRM or GLB model to enable the 3D interviewer.'} />;
+  const missingModel = <MissingModel message={modelState === 'checking' ? 'Checking for the local VRM model…' : modelState === 'error' ? 'A model file was found, but it is not valid VRM/GLB data or could not be rendered.' : 'The Anaya model file is missing. Add a licensed VRM or GLB file to enable the 3D interviewer.'} />;
 
   return <section className="ai-interviewer-identity" aria-label="AI interviewer Anaya">
     <div className={`ai-interviewer-avatar ${speaking ? 'is-speaking' : ''}`}>

@@ -52,10 +52,10 @@
 
 .ai-call-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(300px, .86fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-top: 14px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .ai-call-stage {
@@ -100,6 +100,11 @@
 .ai-interviewer-label strong { color: #1d2740; font-size: 14px; }
 .ai-interviewer-label > span { font-size: 11px; }
 .ai-interviewer-label .ai-avatar-speaking-caption { color: #6b57ef; font-size: 10px; }
+.ai-stage-turn { position: relative; z-index: 2; width: min(720px, calc(100% - 40px)); max-height: 104px; overflow-y: auto; margin: 14px auto 0; padding: 11px 16px; border: 1px solid #e1e5ef; border-radius: 13px; background: #fff; box-shadow: 0 8px 24px #1720330b; }
+.ai-stage-turn > span { display: block; margin-bottom: 4px; color: #7765ea; font-size: 9px; font-weight: 750; letter-spacing: .1em; }
+.ai-stage-turn p { margin: 0; color: #354158; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.ai-stage-turn.is-candidate { border-color: #dcd6ff; background: #f7f5ff; }
+.ai-stage-turn.is-candidate > span { color: #5542ce; }
 .ai-avatar-loading { display: block; padding: 7px 10px; border: 1px solid #ffffff30; border-radius: 99px; background: #171d2ee8; color: #e7e2ff; font: 11px/1.2 system-ui, sans-serif; white-space: nowrap; }
 .ai-self-video { position: absolute; right: 18px; bottom: 82px; width: clamp(130px, 22%, 205px); aspect-ratio: 16 / 10; overflow: hidden; border: 2px solid #fff; border-radius: 14px; background: #e9eaf4; box-shadow: 0 10px 28px #23204425; }
 .ai-self-video video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
@@ -124,6 +129,11 @@
 .ai-end-call-top { min-height: 34px; padding: 0 11px; font-size: 11px; }
 .ai-call-privacy { position: absolute; right: 0; bottom: 5px; left: 0; margin: 0; color: #7d879a; text-align: center; font-size: 10px; }
 
+.ai-call-response-area { width: min(860px, 100%); min-width: 0; margin: 0 auto; }
+.ai-call-response-area .ai-live-feedback { margin: 0 0 10px; }
+.ai-call-response-area .ai-call-error, .ai-call-response-area .ai-call-notice { margin: 0 0 9px; }
+.ai-call-response-area .ai-answer-composer { margin: 0; }
+.ai-call-response-area .ai-answer-note { margin: 7px 2px 0; }
 .ai-call-transcript { display: flex; min-height: 560px; min-width: 0; flex-direction: column; border: 1px solid #e4e8f2; border-radius: 18px; background: #fff; }
 .ai-transcript-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 19px 18px 14px; border-bottom: 1px solid #edf0f6; }
 .ai-transcript-heading .interview-kicker { font-size: 9px; }
@@ -195,6 +205,10 @@ body[data-theme='dark'] .ai-call-stage { border-color: #2a354b; background: radi
 body[data-theme='dark'] .ai-stage-glow, body[data-theme='dark'] .ai-stage-glow::before, body[data-theme='dark'] .ai-stage-glow::after, body[data-theme='dark'] .ai-avatar-halo { border-color: #554b94; }
 body[data-theme='dark'] .ai-interviewer-label { color: #adb8cb; }
 body[data-theme='dark'] .ai-interviewer-label strong { color: #f2f3fb; }
+body[data-theme='dark'] .ai-stage-turn { border-color: #354259; background: #111a2a; box-shadow: 0 8px 24px #0002; }
+body[data-theme='dark'] .ai-stage-turn p { color: #d8e0ee; }
+body[data-theme='dark'] .ai-stage-turn.is-candidate { border-color: #51458a; background: #211e39; }
+body[data-theme='dark'] .ai-stage-turn.is-candidate > span { color: #c3b9ff; }
 body[data-theme='dark'] .ai-avatar-spark, body[data-theme='dark'] .ai-control { border-color: #39445a; background: #1b2638; color: #e4e9f3; }
 body[data-theme='dark'] .ai-avatar-speaking-indicator { background: #111522d9; }
 body[data-theme='dark'] .ai-control.is-active { border-color: #8270ff; background: #302957; color: #c5bbff; }
@@ -214,6 +228,7 @@ body[data-theme='dark'] .ai-voice-status.is-listening { border-color: #6257a6; b
 body[data-theme='dark'] .ai-live-feedback { border-color: #413b6b; background: #1d1a35; color: #c3cbe0; }
 body[data-theme='dark'] .ai-live-feedback-title strong, body[data-theme='dark'] .ai-live-feedback small { color: #c3b9ff; }
 body[data-theme='dark'] .ai-live-feedback p b { color: #edf0fa; }
+body[data-theme='dark'] .ai-live-feedback { border-color: #413b6b; background: #1d1a35; color: #c3cbe0; }
 body[data-theme='dark'] .ai-evaluation-loading, body[data-theme='dark'] .ai-report-score-grid article, body[data-theme='dark'] .ai-report-panel { border-color: #2a354b; background: #111a2a; }
 body[data-theme='dark'] .ai-evaluation-loading h2, body[data-theme='dark'] .ai-report-score-grid article > strong, body[data-theme='dark'] .ai-report-panel h3, body[data-theme='dark'] .ai-preparation-plan article h4 { color: #eef1fc; }
 body[data-theme='dark'] .ai-evaluation-loading p, body[data-theme='dark'] .ai-report-score-grid article > span, body[data-theme='dark'] .ai-report-panel li, body[data-theme='dark'] .ai-report-panel > p, body[data-theme='dark'] .ai-preparation-plan article p, body[data-theme='dark'] .ai-preparation-plan article > small { color: #aab3c8; }
@@ -238,7 +253,7 @@ body[data-theme='dark'] .ai-preparation-plan article strong { color: #c4baff; }
   .ai-call-header-right { gap: 7px; font-size: 10px; }
   .ai-end-call-top { min-height: 32px; gap: 5px; padding: 0 8px; font-size: 10px; }
   .ai-call-layout { gap: 10px; margin-top: 10px; }
-  .ai-call-stage { min-height: 470px; border-radius: 14px; }
+  .ai-call-stage { min-height: 540px; border-radius: 14px; }
   .ai-interviewer-identity { margin-top: -22px; }
   .ai-interviewer-avatar { width: min(300px, 78vw); height: 300px; }
   .ai-self-video { right: 11px; bottom: 94px; width: 32%; }
