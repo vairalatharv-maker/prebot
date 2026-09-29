@@ -27,10 +27,11 @@ function sendEvent(res, payload) {
 }
 
 export async function chat(req, res) {
-  const { messages, stream = false } = req.body || {};
+  const { messages, stream = false, interviewMode = false } = req.body || {};
   const validationError = validateMessages(messages);
   if (validationError) return res.status(400).json({ message: validationError });
   if (typeof stream !== 'boolean') return res.status(400).json({ message: 'The stream option must be a boolean.' });
+  if (typeof interviewMode !== 'boolean') return res.status(400).json({ message: 'The interview mode option must be a boolean.' });
   if (!process.env.GROQ_API_KEY) return res.status(503).json({ message: 'Groq is not configured. Add GROQ_API_KEY to backend/.env and restart the API.' });
 
   const history = messages.slice(-MAX_MESSAGES).map(({ role, content }) => ({ role, content: content.trim() }));
@@ -51,6 +52,7 @@ export async function chat(req, res) {
     }
     const content = await requestGroqChat(history, {
       stream,
+      interviewMode,
       signal: controller.signal,
       onDelta: (delta) => { if (stream) sendEvent(res, { type: 'delta', delta }); },
     });
