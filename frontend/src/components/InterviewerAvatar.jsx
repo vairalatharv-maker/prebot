@@ -125,13 +125,24 @@ function AvatarModel({ src, speaking, reaction, visemeRef }) {
       return match;
     };
     const armPose = [
-      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('leftUpperArm') || namedBone(/left.*upper.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, -0.12, -0.52)) },
-      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('rightUpperArm') || namedBone(/right.*upper.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, 0.12, 0.52)) },
-      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('leftLowerArm') || namedBone(/left.*lower.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, -0.08, -0.24)) },
-      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('rightLowerArm') || namedBone(/right.*lower.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, 0.08, 0.24)) },
+      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('leftUpperArm') || namedBone(/left.*upper.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, -0.12, -1.08)) },
+      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('rightUpperArm') || namedBone(/right.*upper.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, 0.12, 1.08)) },
+      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('leftLowerArm') || namedBone(/left.*lower.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, -0.58, -0.3)) },
+      { bone: vrm?.humanoid?.getNormalizedBoneNode?.('rightLowerArm') || namedBone(/right.*lower.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, 0.58, 0.3)) },
     ].filter(({ bone }) => bone).map(({ bone, offset }) => ({ bone, base: bone.quaternion.clone(), offset }));
     const mixer = gltf.animations?.length ? new AnimationMixer(scene) : null;
-    return { scene, box, center, height, scale, morphs, blinkMorphs, reactionMorphs, expressionManager, expressions, hasBlink, hasHappy, head, chest, jaw, armPose, baseJawX: jaw?.rotation.x || 0, mixer };
+    return {
+      scene, box, center, height, scale, morphs, blinkMorphs, reactionMorphs,
+      expressionManager, expressions,
+      hasBlink: Boolean(expressionManager?.getExpression?.('blink')),
+      hasBlinkLeft: Boolean(expressionManager?.getExpression?.('blinkLeft')),
+      hasBlinkRight: Boolean(expressionManager?.getExpression?.('blinkRight')),
+      hasHappy: Boolean(expressionManager?.getExpression?.('happy')),
+      head, chest,
+      leftEye: vrm?.humanoid?.getNormalizedBoneNode?.('leftEye'),
+      rightEye: vrm?.humanoid?.getNormalizedBoneNode?.('rightEye'),
+      jaw, armPose, baseJawX: jaw?.rotation.x || 0, mixer,
+    };
   }, [scene, vrm, gltf.animations]);
 
   useEffect(() => {
@@ -171,7 +182,7 @@ export default function InterviewerAvatar({ speaking = false, reaction = 'neutra
     <div className={`ai-interviewer-avatar ${speaking ? 'is-speaking' : ''}`}>
       <div className="ai-avatar-halo" />
       {modelState !== 'ready' ? missingModel : <ModelBoundary fallback={<MissingModel message="The local 3D model could not be rendered." />} onError={() => setModelState('error')}>
-        <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.7, 3.05], fov: 30 }} onCreated={({ camera }) => { camera.lookAt(0, 1.7, 0); }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
+        <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.8, 3.2], fov: 30 }} onCreated={({ camera }) => { camera.lookAt(0, 1.8, 0); }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
           <ambientLight intensity={1.35} />
           <directionalLight position={[2, 3, 4]} intensity={2} />
           <directionalLight position={[-2, 1, -2]} intensity={0.65} color="#aa9aff" />

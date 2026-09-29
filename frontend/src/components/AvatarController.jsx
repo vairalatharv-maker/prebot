@@ -15,6 +15,10 @@ export default function AvatarController({ vrm, resources, reaction = 'neutral' 
       headX: resources.head?.rotation.x || 0,
       chestX: resources.chest?.rotation.x || 0,
       chestY: resources.chest?.position.y || 0,
+      leftEyeX: resources.leftEye?.rotation.x || 0,
+      leftEyeY: resources.leftEye?.rotation.y || 0,
+      rightEyeX: resources.rightEye?.rotation.x || 0,
+      rightEyeY: resources.rightEye?.rotation.y || 0,
       jawX: resources.jaw?.rotation.x || 0,
     };
     resources.armPose?.forEach(({ bone, base, offset }) => bone.quaternion.copy(base).multiply(offset));
@@ -25,8 +29,16 @@ export default function AvatarController({ vrm, resources, reaction = 'neutral' 
       resources.head.rotation.x = start.current.headX + Math.sin(elapsed * 0.7) * 0.012 - nod - attentiveLean;
     }
     if (resources.chest) {
-      resources.chest.rotation.x = start.current.chestX + Math.sin(elapsed * 1.5) * 0.012;
+      resources.chest.rotation.x = start.current.chestX + 0.035 + Math.sin(elapsed * 1.5) * 0.012;
       resources.chest.position.y = start.current.chestY + Math.sin(elapsed * 1.25) * 0.006;
+    }
+    if (resources.leftEye) {
+      resources.leftEye.rotation.x = start.current.leftEyeX + Math.sin(elapsed * 0.43) * 0.01;
+      resources.leftEye.rotation.y = start.current.leftEyeY + Math.sin(elapsed * 0.61) * 0.018;
+    }
+    if (resources.rightEye) {
+      resources.rightEye.rotation.x = start.current.rightEyeX + Math.sin(elapsed * 0.43) * 0.01;
+      resources.rightEye.rotation.y = start.current.rightEyeY + Math.sin(elapsed * 0.61) * 0.018;
     }
 
     if (elapsed > nextBlink.current) {
@@ -34,7 +46,13 @@ export default function AvatarController({ vrm, resources, reaction = 'neutral' 
       nextBlink.current = elapsed + 2.5 + Math.random() * 2.5;
     }
     const blink = elapsed < blinkUntil.current ? Math.max(0, Math.sin(((blinkUntil.current - elapsed) / 0.13) * Math.PI)) : 0;
-    if (resources.hasBlink) resources.expressionManager.setValue('blink', blink);
+    if (resources.hasBlinkLeft || resources.hasBlinkRight) {
+      if (resources.hasBlinkLeft) resources.expressionManager.setValue('blinkLeft', blink);
+      if (resources.hasBlinkRight) resources.expressionManager.setValue('blinkRight', blink);
+      if (resources.hasBlink) resources.expressionManager.setValue('blink', 0);
+    } else if (resources.hasBlink) {
+      resources.expressionManager.setValue('blink', blink);
+    }
     resources.blinkMorphs.forEach(({ influences, index }) => { influences[index] = blink; });
     if (resources.hasHappy) resources.expressionManager.setValue('happy', reaction === 'positive' ? 0.18 : 0);
     resources.reactionMorphs.forEach(({ influences, index }) => { influences[index] = reaction === 'positive' ? 0.16 : 0; });
