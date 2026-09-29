@@ -72,6 +72,63 @@ function AvatarLoading() {
   return <Html center><span className="ai-avatar-loading">Loading Anaya…</span></Html>;
 }
 
+function HomeOfficeBackdrop() {
+  return <group position={[0, 0, -1.05]}>
+    <mesh position={[0, 1.45, -0.12]}>
+      <boxGeometry args={[7.5, 5.2, 0.16]} />
+      <meshStandardMaterial color="#292b3d" roughness={0.96} />
+    </mesh>
+    <mesh position={[0, 1.48, -0.025]}>
+      <boxGeometry args={[5.35, 4.88, 0.04]} />
+      <meshStandardMaterial color="#3b3948" roughness={0.92} />
+    </mesh>
+    {[-2.68, 2.68].map((x) => <mesh key={`trim-${x}`} position={[x, 1.46, 0.01]}>
+      <boxGeometry args={[0.035, 4.9, 0.04]} />
+      <meshStandardMaterial color="#85705e" roughness={0.8} />
+    </mesh>)}
+    {[-3.05, -2.82, 2.82, 3.05].map((x) => <mesh key={`slat-${x}`} position={[x, 1.46, 0.025]}>
+      <boxGeometry args={[0.12, 4.9, 0.08]} />
+      <meshStandardMaterial color="#493b39" roughness={0.78} />
+    </mesh>)}
+    <mesh position={[0, -0.88, 0.015]}>
+      <boxGeometry args={[7.5, 0.08, 0.12]} />
+      <meshStandardMaterial color="#89705a" roughness={0.8} />
+    </mesh>
+    <group position={[2.05, 0.93, 0.12]}>
+      <mesh position={[0.12, 0, 0]}>
+        <boxGeometry args={[1.25, 0.1, 0.28]} />
+        <meshStandardMaterial color="#705c4e" roughness={0.72} />
+      </mesh>
+      {[-0.22, 0, 0.22].map((x, index) => <mesh key={`book-${x}`} position={[x, 0.16, 0.005]} rotation={[0, 0, index === 1 ? 0 : -0.06]}>
+        <boxGeometry args={[0.16, 0.28 + (index === 1 ? 0.05 : 0), 0.14]} />
+        <meshStandardMaterial color={['#746b83', '#a58d72', '#526679'][index]} roughness={0.9} />
+      </mesh>)}
+      <mesh position={[0.58, 0.18, 0.02]}>
+        <cylinderGeometry args={[0.09, 0.12, 0.25, 16]} />
+        <meshStandardMaterial color="#b58d78" roughness={0.9} />
+      </mesh>
+      {[-0.08, 0, 0.08].map((x, index) => <mesh key={`leaf-${x}`} position={[0.58 + x, 0.39 + (index === 1 ? 0.06 : 0), 0]} rotation={[0, 0, x * 2]}>
+        <sphereGeometry args={[0.075, 10, 8]} />
+        <meshStandardMaterial color="#73826b" roughness={0.95} />
+      </mesh>)}
+    </group>
+    <group position={[-2.1, 2.42, 0.08]}>
+      <mesh>
+        <boxGeometry args={[0.88, 0.72, 0.08]} />
+        <meshStandardMaterial color="#aa9077" roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 0, 0.052]}>
+        <boxGeometry args={[0.72, 0.56, 0.025]} />
+        <meshStandardMaterial color="#555064" roughness={0.92} />
+      </mesh>
+      <mesh position={[0, 0, 0.071]}>
+        <circleGeometry args={[0.17, 32]} />
+        <meshStandardMaterial color="#9a8b91" roughness={0.9} />
+      </mesh>
+    </group>
+  </group>;
+}
+
 function AvatarModel({ src, speaking, reaction, visemeRef }) {
   const gltf = useLoader(GLTFLoader, src, (loader) => {
     if (!configuredLoaders.has(loader)) {
@@ -183,9 +240,11 @@ export default function InterviewerAvatar({ speaking = false, reaction = 'neutra
       <div className="ai-avatar-halo" />
       {modelState !== 'ready' ? missingModel : <ModelBoundary fallback={<MissingModel message="The local 3D model could not be rendered." />} onError={() => setModelState('error')}>
         <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.8, 3.2], fov: 30 }} onCreated={({ camera }) => { camera.lookAt(0, 1.8, 0); }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
+          <HomeOfficeBackdrop />
           <ambientLight intensity={1.35} />
           <directionalLight position={[2, 3, 4]} intensity={2} />
-          <directionalLight position={[-2, 1, -2]} intensity={0.65} color="#aa9aff" />
+          <directionalLight position={[-2, 1, 1]} intensity={0.65} color="#aa9aff" />
+          <pointLight position={[2.45, 2.15, 0.6]} intensity={0.7} distance={4} color="#e7bd95" />
           <Suspense fallback={<AvatarLoading />}><AvatarModel key={modelUrl} src={modelUrl} speaking={speaking} reaction={reaction} visemeRef={visemeRef} /></Suspense>
         </Canvas>
       </ModelBoundary>}
