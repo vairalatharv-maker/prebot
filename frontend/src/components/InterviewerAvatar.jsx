@@ -239,12 +239,17 @@ export default function InterviewerAvatar({ speaking = false, reaction = 'neutra
     <div className={`ai-interviewer-avatar ${speaking ? 'is-speaking' : ''}`}>
       <div className="ai-avatar-halo" />
       {modelState !== 'ready' ? missingModel : <ModelBoundary fallback={<MissingModel message="The local 3D model could not be rendered." />} onError={() => setModelState('error')}>
-        <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.8, 3.2], fov: 30 }} onCreated={({ camera }) => { camera.lookAt(0, 1.8, 0); }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
+        <Canvas className="ai-avatar-background-canvas" dpr={1} frameloop="demand" camera={{ position: [0, 1.88, 2.65], fov: 30 }} onCreated={({ camera }) => { camera.lookAt(0, 1.88, 0); }} gl={{ alpha: true, antialias: false, powerPreference: 'low-power' }}>
           <HomeOfficeBackdrop />
           <ambientLight intensity={1.35} />
           <directionalLight position={[2, 3, 4]} intensity={2} />
           <directionalLight position={[-2, 1, 1]} intensity={0.65} color="#aa9aff" />
           <pointLight position={[2.45, 2.15, 0.6]} intensity={0.7} distance={4} color="#e7bd95" />
+        </Canvas>
+        <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.88, 2.65], fov: 30 }} onCreated={({ camera, gl }) => { camera.lookAt(0, 1.88, 0); gl.setClearColor(0x000000, 0); }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
+          <ambientLight intensity={1.35} />
+          <directionalLight position={[2, 3, 4]} intensity={2} />
+          <directionalLight position={[-2, 1, 1]} intensity={0.65} color="#aa9aff" />
           <Suspense fallback={<AvatarLoading />}><AvatarModel key={modelUrl} src={modelUrl} speaking={speaking} reaction={reaction} visemeRef={visemeRef} /></Suspense>
         </Canvas>
       </ModelBoundary>}
