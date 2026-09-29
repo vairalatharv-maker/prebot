@@ -125,7 +125,7 @@ if (process.env.MONGODB_URI) {
     });
 } else {
   console.warn(
-    'MONGODB_URI is not configured. Using an in-memory auth fallback for local development.'
+    'MONGODB_URI is not configured. Account registration and sign-in will be unavailable until persistent storage is configured.'
   );
 }
 
