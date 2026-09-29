@@ -1,5 +1,5 @@
-import { Component, Suspense, useEffect, useMemo, useState } from 'react';
-import { Canvas, useLoader } from '@react-three/fiber';
+import { Component, Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { Canvas, useLoader, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { AnimationMixer, Box3, Vector3 } from 'three';
@@ -72,6 +72,27 @@ function AvatarLoading() {
   return <Html center><span className="ai-avatar-loading">Loading Anaya…</span></Html>;
 }
 
+function AvatarCamera({ resources }) {
+  const { camera } = useThree();
+  useLayoutEffect(() => {
+    resources.scene.updateWorldMatrix(true, true);
+    const head = resources.head?.getWorldPosition(new Vector3());
+    const chest = resources.chest?.getWorldPosition(new Vector3());
+    const focusX = head?.x || 0;
+    const focusZ = head?.z || 0;
+    const focusY = head && chest
+      ? (head.y + chest.y) / 2 + 0.04
+      : resources.height * resources.scale * 0.69;
+    const portraitHeight = head && chest ? Math.max(1.38, head.y - chest.y + 0.58) : 1.65;
+    const distance = 3.05;
+    camera.position.set(focusX, focusY, focusZ + distance);
+    camera.fov = 2 * Math.atan(portraitHeight / (2 * distance)) * (180 / Math.PI);
+    camera.lookAt(focusX, focusY, focusZ);
+    camera.updateProjectionMatrix();
+  }, [camera, resources]);
+  return null;
+}
+
 function AvatarModel({ src, speaking, reaction, visemeRef }) {
   const gltf = useLoader(GLTFLoader, src, (loader) => {
     if (!configuredLoaders.has(loader)) {
@@ -135,6 +156,7 @@ function AvatarModel({ src, speaking, reaction, visemeRef }) {
 
   return <group position={[0, -resources.box.min.y * resources.scale, 0]} scale={resources.scale}>
     <primitive object={scene} dispose={null} />
+    <AvatarCamera resources={resources} />
     <AvatarController vrm={vrm} resources={resources} reaction={reaction} />
     <AvatarLipSync resources={resources} speaking={speaking} visemeRef={visemeRef} />
   </group>;
@@ -160,7 +182,7 @@ export default function InterviewerAvatar({ speaking = false, reaction = 'neutra
     <div className={`ai-interviewer-avatar ${speaking ? 'is-speaking' : ''}`}>
       <div className="ai-avatar-halo" />
       {modelState !== 'ready' ? missingModel : <ModelBoundary fallback={<MissingModel message="The local 3D model could not be rendered." />} onError={() => setModelState('error')}>
-        <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.75, 3.45], fov: 36 }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
+        <Canvas className="ai-avatar-canvas" fallback={<MissingModel message="3D rendering is unavailable in this browser." />} dpr={[1, 1.5]} frameloop="always" camera={{ position: [0, 1.7, 3.05], fov: 30 }} gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}>
           <ambientLight intensity={1.35} />
           <directionalLight position={[2, 3, 4]} intensity={2} />
           <directionalLight position={[-2, 1, -2]} intensity={0.65} color="#aa9aff" />

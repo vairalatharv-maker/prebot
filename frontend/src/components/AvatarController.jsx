@@ -14,6 +14,7 @@ export default function AvatarController({ vrm, resources, reaction = 'neutral' 
       headY: resources.head?.rotation.y || 0,
       headX: resources.head?.rotation.x || 0,
       chestX: resources.chest?.rotation.x || 0,
+      chestY: resources.chest?.position.y || 0,
       jawX: resources.jaw?.rotation.x || 0,
     };
     if (resources.head) {
@@ -22,7 +23,10 @@ export default function AvatarController({ vrm, resources, reaction = 'neutral' 
       resources.head.rotation.y = start.current.headY + Math.sin(elapsed * 0.47) * 0.035;
       resources.head.rotation.x = start.current.headX + Math.sin(elapsed * 0.7) * 0.012 - nod - attentiveLean;
     }
-    if (resources.chest) resources.chest.rotation.x = start.current.chestX + Math.sin(elapsed * 1.5) * 0.012;
+    if (resources.chest) {
+      resources.chest.rotation.x = start.current.chestX + Math.sin(elapsed * 1.5) * 0.012;
+      resources.chest.position.y = start.current.chestY + Math.sin(elapsed * 1.25) * 0.006;
+    }
 
     if (elapsed > nextBlink.current) {
       blinkUntil.current = elapsed + 0.13;
