@@ -80,6 +80,9 @@ function AvatarModel({ src, speaking, reaction, visemeRef }) {
     }
   });
   const vrm = gltf.userData.vrm;
+  if (!vrm || vrm.meta?.metaVersion !== '1') {
+    throw new Error('Anaya must be a valid VRM 1.0 model.');
+  }
   const scene = vrm?.scene || gltf.scene;
   const resources = useMemo(() => {
     scene.updateMatrixWorld(true);
@@ -151,7 +154,7 @@ export default function InterviewerAvatar({ speaking = false, reaction = 'neutra
       .catch(() => { if (active) setModelState('missing'); });
     return () => { active = false; };
   }, [modelUrl]);
-  const missingModel = <MissingModel message={modelState === 'checking' ? 'Checking for the local VRM model…' : modelState === 'error' ? 'A model file was found, but it is not valid VRM/GLB data or could not be rendered.' : 'The Anaya model file is missing. Add a licensed VRM or GLB file to enable the 3D interviewer.'} />;
+  const missingModel = <MissingModel message={modelState === 'checking' ? 'Loading the local VRM 1.0 interviewer…' : modelState === 'error' ? 'The model could not be rendered. Check that anaya.vrm is a valid VRM 1.0 file.' : 'The Anaya model file is missing. Add it at the path below to enable the 3D interviewer.'} />;
 
   return <section className="ai-interviewer-identity" aria-label="AI interviewer Anaya">
     <div className={`ai-interviewer-avatar ${speaking ? 'is-speaking' : ''}`}>
