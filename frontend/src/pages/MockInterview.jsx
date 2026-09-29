@@ -25,6 +25,10 @@ function cleanInterviewerSpeech(text) {
   return text.replace(/\[candidate answer\]/gi, '').replace(/(?:^|\n)\s*Candidate answer:.*$/is, '').replace(/\s+Great,\s*$/i, '').replace(/\s+/g, ' ').trim();
 }
 
+function extractInterviewerQuestion(text) {
+  return text.match(/[^?]+\?/g)?.at(-1)?.trim() || text;
+}
+
 function parseInterviewReport(content) {
   try {
     const clean = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
@@ -99,6 +103,7 @@ export default function MockInterview() {
   const [storageWarning, setStorageWarning] = useState(false);
   const [callSeconds, setCallSeconds] = useState(0);
   const [callMessages, setCallMessages] = useState([]);
+  const [currentInterviewerQuestion, setCurrentInterviewerQuestion] = useState('');
   const [callDraft, setCallDraft] = useState('');
   const [callBusy, setCallBusy] = useState(false);
   const [callError, setCallError] = useState('');
@@ -133,12 +138,6 @@ export default function MockInterview() {
   const currentLevel = INTERVIEW_LEVELS.find((item) => item.id === level);
   const currentChecks = checks[questionIndex] || [];
   const latestLiveFeedback = liveFeedbacks.at(-1) || null;
-  const latestCallMessage = callMessages.at(-1);
-  const stageMessage = latestCallMessage?.content
-    ? latestCallMessage
-    : latestCallMessage?.role === 'assistant' && callMessages.at(-2)?.role === 'user'
-      ? callMessages.at(-2)
-      : null;
   const progressPercent = questions.length ? (questionIndex + (phase === 'review' ? 1 : 0)) / questions.length * 100 : 0;
 
   const beginSession = () => {
@@ -189,6 +188,7 @@ export default function MockInterview() {
       const completedHistory = [...history, reply];
       callHistoryRef.current = completedHistory;
       setCallMessages((current) => current.map((message, index) => index === current.length - 1 ? { role: 'assistant', content: spokenTurn } : message));
+      setCurrentInterviewerQuestion(extractInterviewerQuestion(spokenTurn));
       if (turn.feedback) setLiveFeedbacks((current) => [...current, { ...turn.feedback, answerCount: callHistoryRef.current.filter((message) => message.role === 'user').length - 1 }]);
       speakInterviewer(spokenTurn);
     } catch (error) {
@@ -218,6 +218,7 @@ export default function MockInterview() {
     setReportError('');
     setHistoryWarning(false);
     setAiSpeaking(false);
+    setCurrentInterviewerQuestion('');
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     autoVoiceRef.current = Boolean(Recognition);
     if (!Recognition) setCallNotice('For a fully voice-led interview, open this page in Chrome. You can still type your answers here.');
@@ -240,6 +241,7 @@ export default function MockInterview() {
   const submitCallAnswer = (value = callDraftRef.current) => {
     const answer = value.trim();
     if (!answer || callBusy || !callActiveRef.current) return;
+    setCurrentInterviewerQuestion('');
     window.speechSynthesis?.cancel();
     avatarVisemeRef.current = null;
     voiceTurnRef.current += 1;
@@ -270,6 +272,7 @@ export default function MockInterview() {
     recognition.onresult = (event) => {
       const spoken = Array.from(event.results).map((result) => result[0].transcript).join(' ').trim();
       if (!spoken) return;
+      setCurrentInterviewerQuestion('');
       voiceTranscriptRef.current = spoken;
       const next = `${startText}${startText && !startText.endsWith(' ') ? ' ' : ''}${spoken}`;
       callDraftRef.current = next;
@@ -368,6 +371,7 @@ export default function MockInterview() {
     setCameraEnabled(false);
     setVoiceInput(false);
     setAiSpeaking(false);
+    setCurrentInterviewerQuestion('');
     const summary = callMessagesRef.current.filter((message) => message.content);
     setAiSessionSummary(summary);
     setCallMessages([]);
@@ -449,7 +453,7 @@ export default function MockInterview() {
     return date && !Number.isNaN(date.valueOf()) ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
   }, [savedSession]);
 
-  return <div className="page-wrap interview-page">
+  return <div className={`page-wrap interview-page ${mode === 'call' ? 'is-live-call' : ''}`}>
     <header className="page-topline interview-topline"><div><div className="eyebrow"><Sparkles size={14} /> PREPBOT · YOUR PLACEMENT COACH</div><h1>Mock Interview</h1></div>
       {mode === 'interview' && <div className={`interview-clock ${secondsLeft <= 20 ? 'interview-clock-overtime' : ''}`}><Clock3 size={15} /><strong>{formatClock(secondsLeft)}</strong><span>{secondsLeft === 0 ? 'take your time' : 'for this answer'}</span></div>}
     </header>
@@ -480,21 +484,23 @@ export default function MockInterview() {
         <section className="ai-call-stage" aria-label="Video interview">
           <div className="ai-stage-glow" />
           <Suspense fallback={<div className="ai-interviewer-placeholder" role="status">Preparing Anaya…</div>}><InterviewerAvatar speaking={aiSpeaking} visemeRef={avatarVisemeRef} reaction={voiceInput ? 'attentive' : latestLiveFeedback?.score >= 75 ? 'positive' : 'neutral'} /></Suspense>
-          <section className={`ai-stage-turn ${stageMessage?.role === 'user' ? 'is-candidate' : ''}`} aria-live="polite" aria-atomic="true">
-            <span>{stageMessage?.role === 'user' ? 'YOU' : 'ANAYA'}</span>
-            <p>{stageMessage?.content || (callBusy ? 'Anaya is preparing her next question…' : 'Your interview conversation will appear here.')}</p>
+          <section className={`ai-stage-turn ${currentInterviewerQuestion ? 'has-question' : ''}`} aria-live="polite" aria-atomic="true" aria-hidden={!currentInterviewerQuestion}>
+            <span><Mic size={28} aria-hidden="true" /></span>
+            <p key={currentInterviewerQuestion}>{currentInterviewerQuestion}</p>
           </section>
-          <div className="ai-self-video">{cameraEnabled && mediaStreamRef.current ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera preview" /> : <div className="ai-camera-off"><CameraOff size={22}/><span>Camera off</span></div>}<span className="ai-self-video-label">You</span></div>
           <div className="ai-call-controls"><div className={`ai-voice-status ${voiceInput ? 'is-listening' : aiSpeaking ? 'is-speaking' : ''}`}><Mic size={17}/><span>{aiSpeaking ? 'PrepBot is speaking' : callBusy ? 'Preparing your next question' : autoVoiceRef.current ? 'Speak naturally — it listens automatically' : 'Type your answer below'}</span></div><button type="button" className={`ai-control ${cameraEnabled ? '' : 'is-muted'}`} onClick={toggleCamera} aria-label={cameraEnabled ? 'Turn camera off' : 'Turn camera on'} title={cameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{cameraEnabled ? <Camera size={18}/> : <CameraOff size={18}/>}<span>{cameraEnabled ? 'Camera on' : 'Camera off'}</span></button><button type="button" className="ai-end-call" onClick={endAiInterview}><PhoneOff size={17}/><span>End call</span></button></div>
           <p className="ai-call-privacy">Camera preview is local and is not recorded or sent.</p>
         </section>
-        <section className="ai-call-response-area" aria-label="Interview response and feedback">
+        <aside className="ai-call-sidebar" aria-label="Your interview camera and response">
+          <div className="ai-self-video">{cameraEnabled && mediaStreamRef.current ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera preview" /> : <div className="ai-camera-off"><CameraOff size={22}/><span>Camera off</span></div>}<span className="ai-self-video-label">You</span></div>
+          <section className="ai-call-response-area" aria-label="Interview answer and feedback">
           {latestLiveFeedback && <section className="ai-live-feedback" aria-live="polite"><div className="ai-live-feedback-title"><span className="interview-kicker">LIVE INTERVIEW FEEDBACK</span>{latestLiveFeedback.score !== undefined && <strong>{latestLiveFeedback.score}/100</strong>}</div><p><b>Working well:</b> {latestLiveFeedback.strength || 'Keep explaining your thinking clearly.'}</p><p><b>Improve:</b> {latestLiveFeedback.improve || 'Add a specific example when useful.'}</p><small><Target size={12}/> Try next: {latestLiveFeedback.practice || 'Support your answer with a concrete example.'}</small></section>}
           {callError && <div className="ai-call-error" role="alert"><span>{callError}</span><button type="button" onClick={() => { const history = callHistoryRef.current; if (history.at(-1)?.role === 'user') void receiveInterviewer(history); }}>Retry</button></div>}
           {callNotice && <p className="ai-call-notice" role="status">{callNotice}</p>}
-          <form className="ai-answer-composer" onSubmit={(event) => { event.preventDefault(); submitCallAnswer(); }}><textarea rows="2" maxLength="4000" value={callDraft} onChange={(event) => { callDraftRef.current = event.target.value; setCallDraft(event.target.value); }} placeholder={voiceInput ? 'Listening… your words will appear here' : 'Type your answer or use voice input…'} aria-label="Your interview answer" disabled={callBusy}/><button type="submit" disabled={callBusy || !callDraft.trim()} aria-label="Send answer"><Send size={17}/></button></form>
+          <form className="ai-answer-composer" onSubmit={(event) => { event.preventDefault(); submitCallAnswer(); }}><textarea rows="2" maxLength="4000" value={callDraft} onChange={(event) => { callDraftRef.current = event.target.value; setCallDraft(event.target.value); if (event.target.value.trim()) setCurrentInterviewerQuestion(''); }} placeholder={voiceInput ? 'Listening… your words will appear here' : 'Type your answer or use voice input…'} aria-label="Your interview answer" disabled={callBusy}/><button type="submit" disabled={callBusy || !callDraft.trim()} aria-label="Send answer"><Send size={17}/></button></form>
           <p className="ai-answer-note">Your answer text is sent to PrepBot AI to create relevant follow-up questions.</p>
-        </section>
+          </section>
+        </aside>
       </div>
     </main>}
 
