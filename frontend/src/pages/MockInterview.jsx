@@ -26,7 +26,7 @@ function cleanInterviewerSpeech(text) {
 }
 
 function extractInterviewerQuestion(text) {
-  return text.match(/[^?]+\?/g)?.at(-1)?.trim() || text;
+  return text.match(/[^.!?]*\?/g)?.at(-1)?.trim() || text.split(/(?<=[.!?])\s+/).at(-1)?.trim() || text;
 }
 
 function parseInterviewReport(content) {
