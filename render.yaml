@@ -1,0 +1,9 @@
+services:
+  - type: static
+    name: prebot-frontend
+    buildCommand: npm --prefix frontend install && npm --prefix frontend run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
