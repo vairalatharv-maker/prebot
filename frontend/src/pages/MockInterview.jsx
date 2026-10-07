@@ -202,10 +202,16 @@ export default function MockInterview() {
       setTypedInterviewerQuestion(question.slice(0, questionVisible));
     };
     const voices = window.speechSynthesis.getVoices();
-    utterance.voice = voices.find((voice) => /english/i.test(voice.lang) && /(natural|google|neural)/i.test(voice.name)) || voices.find((voice) => /en-IN/i.test(voice.lang)) || null;
+    const preferredFemaleVoice =
+      voices.find((voice) => /en/i.test(voice.lang) && /female|woman|girl|zira|samantha|aria|susan|jenny|victoria|karen|kathleen|sara|female voice|voice female/i.test(voice.name)) ||
+      voices.find((voice) => /en/i.test(voice.lang) && /(zira|samantha|aria|jenny|victoria|susan|karen|kathleen|sara|female)/i.test(voice.name)) ||
+      voices.find((voice) => /en/i.test(voice.lang) && /(google|natural|neural)/i.test(voice.name)) ||
+      voices.find((voice) => /en-IN|en-US|en-GB/i.test(voice.lang)) ||
+      null;
+    utterance.voice = preferredFemaleVoice || voices.find((voice) => /english/i.test(voice.lang) && /(natural|google|neural)/i.test(voice.name)) || voices.find((voice) => /en-IN/i.test(voice.lang)) || null;
     utterance.lang = utterance.voice?.lang || 'en-IN';
-    utterance.rate = 0.96;
-    utterance.pitch = 1.02;
+    utterance.rate = 0.94;
+    utterance.pitch = 1.12;
     utterance.onstart = () => {
       avatarVisemeRef.current = null;
       setAiSpeaking(true);

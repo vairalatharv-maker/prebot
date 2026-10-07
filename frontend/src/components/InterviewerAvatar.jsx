@@ -225,12 +225,12 @@ function AvatarModel({ src, speaking, reaction, visemeRef, onLoaded }) {
     const head = vrm?.humanoid?.getNormalizedBoneNode?.('head') || namedHead;
     const chest = vrm?.humanoid?.getNormalizedBoneNode?.('chest') || vrm?.humanoid?.getNormalizedBoneNode?.('upperChest') || namedChest;
     const jaw = vrm?.humanoid?.getNormalizedBoneNode?.('jaw') || namedJaw;
-    const leftLowerArm = vrm?.humanoid?.getNormalizedBoneNode?.('leftLowerArm') || namedBone(/left.*lower.?arm/i);
     const namedBone = (pattern) => {
       let match = null;
       scene.traverse((object) => { if (!match && object.isBone && pattern.test(object.name)) match = object; });
       return match;
     };
+    const leftLowerArm = vrm?.humanoid?.getNormalizedBoneNode?.('leftLowerArm') || namedBone(/left.*lower.?arm/i);
     const armPose = [
       { bone: vrm?.humanoid?.getNormalizedBoneNode?.('leftUpperArm') || namedBone(/left.*upper.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, -0.12, -1.08)) },
       { bone: vrm?.humanoid?.getNormalizedBoneNode?.('rightUpperArm') || namedBone(/right.*upper.?arm/i), offset: new Quaternion().setFromEuler(new Euler(0, 0.12, 1.08)) },

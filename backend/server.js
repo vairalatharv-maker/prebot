@@ -1,11 +1,11 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import mongoose from 'mongoose';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import authRoutes from './routes/auth.js';
 import chatRoutes from './routes/chat.js';
+import supabase from './config/supabase.js';
 
 const backendDirectory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,21 +23,26 @@ app.disable('x-powered-by');
 ========================= */
 
 const allowedOrigins = [
-  'http://localhost:5173',
   'https://prebot-1.onrender.com',
   'https://prebot-r2uw.vercel.app',
 ];
 
+export function isAllowedOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin);
+}
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without an Origin header
-      // (for example health checks/server-to-server requests)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
 
@@ -110,25 +115,17 @@ app.use((err, _req, res, _next) => {
 /* =========================
    MongoDB Connection
 ========================= */
+/* =========================
+   Supabase Connection
+========================= */
 
-if (process.env.MONGODB_URI) {
-  mongoose
-    .connect(process.env.MONGODB_URI)
-    .then(() => {
-      console.log('Connected to MongoDB.');
-    })
-    .catch((error) => {
-      console.error(
-        'MongoDB connection failed:',
-        error.message
-      );
-    });
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY) {
+  console.log('Supabase configuration loaded.');
 } else {
   console.warn(
-    'MONGODB_URI is not configured. Account registration and sign-in will be unavailable until persistent storage is configured.'
+    'SUPABASE_URL or SUPABASE_SECRET_KEY is not configured.'
   );
 }
-
 /* =========================
    Vercel Export
 ========================= */
@@ -139,7 +136,9 @@ export default app;
    Local Development Server
 ========================= */
 
-if (process.env.VERCEL !== '1') {
+const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+
+if (process.env.VERCEL !== '1' && isMainModule && process.env.NODE_ENV !== 'test') {
   app.listen(port, '0.0.0.0', () => {
     console.log(`PrepBot API listening on port ${port}`);
   });
