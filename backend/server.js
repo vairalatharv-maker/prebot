@@ -32,7 +32,7 @@ export function isAllowedOrigin(origin) {
     return true;
   }
 
-  if (allowedOrigins.includes(origin)) {
+  if (allowedOrigins.includes(origin) || /^https?:\/\/prebot[^.]*\.onrender\.com$/i.test(origin)) {
     return true;
   }
 
@@ -62,18 +62,23 @@ app.use(express.json({ limit: '64kb' }));
    Health Check
 ========================= */
 
-app.get('/api/health', (_req, res) => {
+const handleHealth = (_req, res) => {
   res.json({
     status: 'ok',
     service: 'prepbot-api',
   });
-});
+};
+
+app.get('/health', handleHealth);
+app.get('/api/health', handleHealth);
 
 /* =========================
    Routes
 ========================= */
 
+app.use('/auth', authRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/chat', chatRoutes);
 app.use('/api/chat', chatRoutes);
 
 /* =========================
