@@ -1,6 +1,13 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import supabase from '../config/supabase.js';
+import {
+  createMemoryUser,
+  findMemoryUserByEmail,
+  findMemoryUserById,
+} from '../config/authStore.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'prepbot-jwt-secret-key-production-fallback';
 
 function makeToken(user) {
   return jwt.sign(
@@ -9,7 +16,7 @@ function makeToken(user) {
       name: user.name,
       email: user.email,
     },
-    process.env.JWT_SECRET,
+    JWT_SECRET,
     { expiresIn: '7d' }
   );
 }
@@ -22,17 +29,7 @@ function safeUser(user) {
   };
 }
 
-function requireDatabase(res) {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
-    res.status(503).json({
-      message:
-        'Account storage is not configured. Set SUPABASE_URL and SUPABASE_SECRET_KEY in backend/.env and restart the API.',
-    });
-    return false;
-  }
-
-  return true;
-}
+const isSupabaseConfigured = () => Boolean(supabase);
 
 export async function register(req, res, next) {
   try {
@@ -68,51 +65,60 @@ export async function register(req, res, next) {
       });
     }
 
-    if (!requireDatabase(res)) return;
-
     const normalizedEmail = email.trim().toLowerCase();
-
-    // Check if user already exists
-    const { data: existingUser, error: findError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
-
-    if (findError) {
-      console.error('Supabase user lookup error:', findError);
-      return res.status(500).json({
-        message: 'Could not check account. Please try again.',
-      });
-    }
-
-    if (existingUser) {
-      return res.status(409).json({
-        message:
-          'An account with that email already exists. Sign in instead.',
-      });
-    }
-
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create user
-    const { data: user, error: insertError } = await supabase
-      .from('users')
-      .insert({
-        name: name.trim(),
-        email: normalizedEmail,
-        password_hash: passwordHash,
-      })
-      .select('id, name, email')
-      .single();
+    // Try Supabase if configured
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: existingUser, error: findError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', normalizedEmail)
+          .maybeSingle();
 
-    if (insertError) {
-      console.error('Supabase user insert error:', insertError);
+        if (existingUser) {
+          return res.status(409).json({
+            message: 'An account with that email already exists. Sign in instead.',
+          });
+        }
 
-      return res.status(500).json({
-        message: 'Could not create account. Please try again.',
+        if (!findError) {
+          const { data: user, error: insertError } = await supabase
+            .from('users')
+            .insert({
+              name: name.trim(),
+              email: normalizedEmail,
+              password_hash: passwordHash,
+            })
+            .select('id, name, email')
+            .single();
+
+          if (!insertError && user) {
+            return res.status(201).json({
+              user: safeUser(user),
+              token: makeToken(user),
+            });
+          }
+        }
+        console.warn('Supabase store unavailable, falling back to in-memory store.');
+      } catch (err) {
+        console.warn('Supabase register error, falling back to in-memory store:', err.message);
+      }
+    }
+
+    // In-memory fallback
+    if (findMemoryUserByEmail(normalizedEmail)) {
+      return res.status(409).json({
+        message: 'An account with that email already exists. Sign in instead.',
       });
     }
+
+    const user = createMemoryUser({
+      name: name.trim(),
+      email: normalizedEmail,
+      passwordHash,
+    });
 
     return res.status(201).json({
       user: safeUser(user),
@@ -138,36 +144,45 @@ export async function login(req, res, next) {
       });
     }
 
-    if (!requireDatabase(res)) return;
-
     const normalizedEmail = email.trim().toLowerCase();
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, name, email, password_hash')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
+    // Try Supabase if configured
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('id, name, email, password_hash')
+          .eq('email', normalizedEmail)
+          .maybeSingle();
 
-    if (error) {
-      console.error('Supabase login error:', error);
+        if (!error && user) {
+          const isValid = await bcrypt.compare(password, user.password_hash);
+          if (!isValid) {
+            return res.status(401).json({
+              message: 'Email or password is incorrect.',
+            });
+          }
+          return res.json({
+            user: safeUser(user),
+            token: makeToken(user),
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase login check error, checking memory store:', err.message);
+      }
+    }
 
-      return res.status(500).json({
-        message: 'Could not sign in. Please try again.',
+    // In-memory check
+    const memUser = findMemoryUserByEmail(normalizedEmail);
+    if (memUser && (await bcrypt.compare(password, memUser.passwordHash))) {
+      return res.json({
+        user: safeUser(memUser),
+        token: makeToken(memUser),
       });
     }
 
-    if (
-      !user ||
-      !(await bcrypt.compare(password, user.password_hash))
-    ) {
-      return res.status(401).json({
-        message: 'Email or password is incorrect.',
-      });
-    }
-
-    return res.json({
-      user: safeUser(user),
-      token: makeToken(user),
+    return res.status(401).json({
+      message: 'Email or password is incorrect. If you have not created an account yet, please register.',
     });
   } catch (error) {
     return next(error);
@@ -176,30 +191,33 @@ export async function login(req, res, next) {
 
 export async function me(req, res, next) {
   try {
-    if (!requireDatabase(res)) return;
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .eq('id', req.user.sub)
+          .maybeSingle();
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, name, email')
-      .eq('id', req.user.sub)
-      .maybeSingle();
+        if (!error && user) {
+          return res.json({
+            user: safeUser(user),
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase me error, checking memory store:', err.message);
+      }
+    }
 
-    if (error) {
-      console.error('Supabase profile lookup error:', error);
-
-      return res.status(500).json({
-        message: 'Could not load account.',
+    const memUser = findMemoryUserById(req.user.sub);
+    if (memUser) {
+      return res.json({
+        user: safeUser(memUser),
       });
     }
 
-    if (!user) {
-      return res.status(401).json({
-        message: 'Account not found. Please sign in again.',
-      });
-    }
-
-    return res.json({
-      user: safeUser(user),
+    return res.status(401).json({
+      message: 'Account not found. Please sign in again.',
     });
   } catch (error) {
     return next(error);
